@@ -7,7 +7,6 @@ classdef panda_arm < handle
         %% --- State variables ---
         q
         qdot
-        xdot
         %% --- Geometry ---
         wTb
         %% --- Limits ---

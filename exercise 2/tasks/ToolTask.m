@@ -1,7 +1,7 @@
 classdef ToolTask < Task   
     %Tool position control for a single arm
     properties
-
+        gain = 1.0;
     end
 
     methods
@@ -11,34 +11,37 @@ classdef ToolTask < Task
             obj.task_name=taskID;
         end
 
-        function updateReference(obj, robot)
+        function updateReference(obj, robot_system)
             if(obj.ID=='L')
-                robot=robot.left_arm;
+                robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot.right_arm;    
+                robot=robot_system.right_arm;    
             end
          [v_ang, v_lin] = CartError(robot.wTg , robot.wTt);
          robot.dist_to_goal=v_lin;
          robot.rot_to_goal=v_ang;
-         obj.xdotbar = 1.0 * [v_ang; v_lin];
+         obj.xdotbar = obj.gain * [v_ang; v_lin];
          % limit the requested velocities...
          obj.xdotbar(1:3) = Saturate(obj.xdotbar(1:3), 0.3);
          obj.xdotbar(4:6) = Saturate(obj.xdotbar(4:6), 0.3);
         end
-
-        function updateJacobian(obj,robot)
+        
+        function updateJacobian(obj,robot_system)
             if(obj.ID=='L')
-                robot=robot.left_arm;
+                robot=robot_system.left_arm;
             elseif(obj.ID=='R')
-                robot=robot.right_arm;    
+                robot=robot_system.right_arm;    
             end
             tool_jacobian=robot.wJt;
-            obj.J=tool_jacobian;
-            %Optional save the end effector velocity for plotting
-            robot.xdot = tool_jacobian * robot.qdot;
+            
+            if obj.ID=='L'
+                obj.J=[tool_jacobian, zeros(6, 7)];
+            elseif obj.ID=='R'
+                obj.J=[zeros(6, 7), tool_jacobian];
+            end
         end
 
-        function updateActivation(obj, robot)
+        function updateActivation(obj, robot_system)
             obj.A = eye(6);
         end
     end

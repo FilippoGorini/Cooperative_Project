@@ -104,21 +104,16 @@ classdef MinEffectorAltitudeTask < Task
                 error('Unknown robot ID');
             end
 
-            % Now the jacobian is for one arm only (1x7 instead of 1x14):
-            obj.J = robot.wJe(6, :);
+            % Extract Z linear velocity Jacobian
+            % wJe = [ang; lin] → linear Z is row 6
+            Jz = robot.wJe(6, :);
 
-            % % Extract Z linear velocity Jacobian
-            % % wJe = [ang; lin] → linear Z is row 6
-            % Jz = robot.wJe(6, :);
-            % 
-            % 
-            % % Build full Jacobian (1x14)
-            % if strcmp(obj.ID, 'L')
-            %     obj.J = [Jz, zeros(1, 7)];
-            % else
-            %     obj.J = [zeros(1, 7), Jz];
-            % end
-            
+            % Build full Jacobian (1x14)
+            if strcmp(obj.ID, 'L')
+                obj.J = [Jz, zeros(1, 7)];
+            else
+                obj.J = [zeros(1, 7), Jz];
+            end
         end
 
         % -------------------------------------------------------------

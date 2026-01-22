@@ -68,17 +68,14 @@ classdef JointLimitsIndividualTask < Task
             % Il Jacobiano per i joint limits è semplicemente una matrice Identità
             % (vogliamo controllare direttamente qdot).
             
-            % Now we don't have anymore the extended system
-            obj.J = eye(7);
-
-            % % Costruiamo il Jacobiano esteso per il sistema (14 DOF)
-            % if obj.ID == 'L'
-            %     % Parte sinistra Identity, parte destra Zeri
-            %     obj.J = [eye(7), zeros(7,7)];
-            % elseif obj.ID == 'R'
-            %     % Parte sinistra Zeri, parte destra Identity
-            %     obj.J = [zeros(7,7), eye(7)];
-            % end
+            % Costruiamo il Jacobiano esteso per il sistema (14 DOF)
+            if obj.ID == 'L'
+                % Parte sinistra Identity, parte destra Zeri
+                obj.J = [eye(7), zeros(7,7)];
+            elseif obj.ID == 'R'
+                % Parte sinistra Zeri, parte destra Identity
+                obj.J = [zeros(7,7), eye(7)];
+            end
         end
 
         function updateActivation(obj, robot_system)
