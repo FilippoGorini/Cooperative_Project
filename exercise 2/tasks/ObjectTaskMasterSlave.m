@@ -1,6 +1,6 @@
 classdef ObjectTaskMasterSlave < Task
     properties
-        kp = 0.1; 
+        kp = 0.3; 
     end
     
     methods

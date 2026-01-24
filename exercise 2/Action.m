@@ -8,7 +8,9 @@ classdef Action < handle
     end
     
     methods
+
         function obj = Action(name, tasks)
+
             if nargin > 0
                 if ~(ischar(name) || isstring(name))
                     error('Action name must be a char/string.');
@@ -18,9 +20,13 @@ classdef Action < handle
                 if ~iscell(tasks)
                     error('Tasks must be a cell array.');
                 end
+
                 obj.tasks = tasks;
             end
+            
         end
+
     end
+
 end
 

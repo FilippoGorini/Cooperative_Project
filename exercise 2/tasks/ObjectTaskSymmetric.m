@@ -1,6 +1,6 @@
 classdef ObjectTaskSymmetric < Task
     properties
-        kp = 0.1; % Proportional gain for position control
+        kp = 1.0; % Proportional gain for position control
     end
     
     methods

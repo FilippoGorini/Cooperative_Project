@@ -1,13 +1,15 @@
 classdef KinConstraintTask < Task   
-    %Tool position control for a single arm
+    % Enforce kinematic constraint between the 2 arms
     properties
         
     end
 
     methods
 
-        function obj=KinConstraintTask()
+        function obj = KinConstraintTask(robot_ID, taskID)
             obj.is_kin_constraint = true; % Notice this is a kinematic constraint
+            obj.ID = robot_ID;
+            obj.task_name = taskID;
         end
 
         function updateReference(obj, robot_system)
@@ -55,5 +57,7 @@ classdef KinConstraintTask < Task
         function updateActivation(obj, robot_system)
             obj.A = eye(6);
         end
+
     end
+    
 end

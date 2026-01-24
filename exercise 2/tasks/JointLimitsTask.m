@@ -22,7 +22,6 @@ classdef JointLimitsTask < Task
             deg2rad = pi/180;
             
             % Limiti dal Datasheet Franka Emika Panda
-            % A1, A2, A3, A4, A5, A6, A7
             limits_deg_min = [-166, -101, -166, -176, -166,  -1, -166, -166, -101, -166, -176, -166,  -1, -166];
             limits_deg_max = [ 166,  101,  166,   -4,  166, 215,  166, 166,  101,  166,   -4,  166, 215,  166];
             

@@ -90,7 +90,7 @@ function main()
 
     % Task object
     object_task = ObjectTaskMasterSlave("BM", "Object"); 
-    % object_task = ObjectTaskSymmetric("BM", "Object");
+    % object_task = ObjectTaskSymmetric("L", "LO");
 
     % ---------------
     % --- ACTIONS ---
@@ -161,10 +161,8 @@ function main()
                 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)
-                    fprintf('Current action: MoveTo | t = %.2f s\n', t);
-                    fprintf('  Left Arm : Lin Err = %.4f m | Ang Err = %.4f rad\n', left_lin_error, left_ang_error);
-                    fprintf('  Right Arm: Lin Err = %.4f m | Ang Err = %.4f rad\n', right_lin_error, right_ang_error);
-                    fprintf('\n');
+                    fprintf('Action: MoveTo  | t: %.2f | L_Lin: %.4f L_Ang: %.4f | R_Lin: %.4f R_Ang: %.4f\n', ...
+                            t, left_lin_error, left_ang_error, right_lin_error, right_ang_error);
                     last_print_time = t;
                 end
                 
@@ -219,10 +217,8 @@ function main()
 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)
-                    fprintf('Current action: MoveObj | t = %.2f s\n', t);
-                    fprintf('  Obj (Left Est) : Lin Err = %.4f m | Ang Err = %.4f rad\n', left_obj_lin_err, left_obj_ang_err);
-                    fprintf('  Obj (Right Est): Lin Err = %.4f m | Ang Err = %.4f rad\n', right_obj_lin_err, right_obj_ang_err);
-                    fprintf('\n'); 
+                    fprintf('Action: MoveObj | t: %.2f | Obj_L_Lin: %.4f Obj_L_Ang: %.4f | Obj_R_Lin: %.4f Obj_R_Ang: %.4f\n', ...
+                            t, left_obj_lin_err, left_obj_ang_err, right_obj_lin_err, right_obj_ang_err);
                     last_print_time = t;
                 end
                 
@@ -244,8 +240,7 @@ function main()
                 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)
-                    fprintf('Current action: Stop | t = %.2f s\n', t);
-                    last_print_time = t;
+
                 end
 
         end
