@@ -8,6 +8,7 @@ classdef PandaArm < handle
         %% State variables
         q
         qdot
+        xdot
 
         %% Geometry 
         wTb

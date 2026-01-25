@@ -1,12 +1,13 @@
 classdef ActionManager < handle
+
     properties
         dt = 0.01
         num_dofs = 13
-        task_set = {}                   % Contains all the possible tasks
+        unified_task_list = {}          % Contains all the possible tasks
         actions Action = Action.empty   % Array of action objects
         actionMap                       % Map of action names
-        currentAction = 1               % index of currently active action
-        previousAction = 1              % index of the previously active action
+        currentAction_idx = 1           % index of currently active action
+        previousAction_idx = 1          % index of the previously active action
         timeInCurrentAction = 0         % Time elapsed since setCurrentAction was called
         transitionDuration = 5          % 5 second transition time between actions
     end
@@ -44,8 +45,8 @@ classdef ActionManager < handle
 
         % This method adds the global task set to the ActionManager
         % The priorities of the tasks depend on the order in this set
-        function addTaskSet(obj, taskSet)
-            obj.task_set = taskSet;
+        function addUnifiedList(obj, list)
+            obj.unified_task_list = list;
         end
 
         % This method now accepts an Action object and updates the
@@ -72,33 +73,37 @@ classdef ActionManager < handle
         % performs the ICAT step
         function qdot = computeICAT(obj, robot)
 
-            % Get current action
-            current_tasks  = obj.actions(obj.currentAction).tasks;
-            previous_tasks = obj.actions(obj.previousAction).tasks;
+            % Get current and previous action tasks
+            current_tasks  = obj.actions(obj.currentAction_idx).tasks;
+            previous_tasks = obj.actions(obj.previousAction_idx).tasks;
 
             % Perform ICAT (task-priority inverse kinematics)
-            ydotbar = zeros(obj.num_dofs,1);
+            ydotbar = zeros(obj.num_dofs, 1);
             Qp = eye(obj.num_dofs);
 
-            for i = 1:length(obj.task_set)  % Iterate on ALL of the possible tasks
+            for i = 1:length(obj.unified_task_list)  % Iterate on ALL of the possible tasks
                 
                 % Extract task
-                task = obj.task_set{i};
+                task = obj.unified_task_list{i};
 
                 % Check if task is contained in current and/or previous action
                 inCurrent = false;
+                inPrevious = false;
+
                 for k = 1:length(current_tasks)
                     if task == current_tasks{k}, inCurrent = true; break; end
-                end
-                inPrevious = false;
+                end             
+                
                 for k = 1:length(previous_tasks)
                     if task == previous_tasks{k}, inPrevious = true; break; end
                 end          
 
                 % Determine task transition activation based on task status
                 trans_act = 0;
+
+                % Ramp up activation if task is new
                 if ~inPrevious && inCurrent
-                    if task.is_kin_constraint
+                    if task.is_kin_constraint       % Enforce binary activation for kinematic constraints
                         trans_act = 1;
                     else
                         trans_act = IncreasingBellShapedFunction(0, ...
@@ -107,8 +112,10 @@ classdef ActionManager < handle
                                                                 1, ...
                                                                 obj.timeInCurrentAction);
                     end
+
+                % Ramp down activation if we are turning it off
                 elseif inPrevious && ~inCurrent
-                    if task.is_kin_constraint
+                    if task.is_kin_constraint       % Enforce binary activation for kinematic constraints
                         trans_act = 0;
                     else
                         trans_act = DecreasingBellShapedFunction(0, ...
@@ -117,23 +124,27 @@ classdef ActionManager < handle
                                                                 1, ...
                                                                 obj.timeInCurrentAction);
                     end
+
+                % Keep full activation if task was active both now and
+                % previously
                 elseif inPrevious && inCurrent
                     trans_act = 1;
                 end
 
-                % Update task
+                % Always update tasks
                 task.updateReference(robot);
                 task.updateJacobian(robot);
                 task.updateActivation(robot);
                 
                 % If the transition activation is 0 we can just skip the ICAT
-                % computation all together
+                % computation all together 
                 if trans_act == 0
                     continue; 
                 end
                 
-                % Perform ICAT Step
-                [Qp, ydotbar] = iCAT_task(trans_act*task.A, task.J, ...
+                % Perform ICAT Step considering each task's transition
+                % activation
+                [Qp, ydotbar] = iCAT_task(trans_act * task.A, task.J, ...
                                            Qp, ydotbar, task.xdotbar, ...
                                            1e-4, 0.01, 10);
             end
@@ -145,6 +156,9 @@ classdef ActionManager < handle
 
             % Increment time elapsed since last action switch
             obj.timeInCurrentAction = obj.timeInCurrentAction + obj.dt;  % better use robot.dt
+            % Actually we could take the dt from robot.dt, not really
+            % necessary to pass it explicitly to the action manager at
+            % constructio 
 
         end
 
@@ -160,16 +174,17 @@ classdef ActionManager < handle
                 error('No action named "%s" exists. Use addAction(Action) first.', name);
             end
 
-            idx = obj.actionMap(name);
+            new_idx = obj.actionMap(name);
 
             % Update previous/current indices
-            obj.previousAction = obj.currentAction;
-            obj.currentAction = idx;
+            obj.previousAction_idx = obj.currentAction_idx;
+            obj.currentAction_idx = new_idx;
             obj.timeInCurrentAction = 0;
         end
 
         function name = getCurrentActionName(obj)
-            name = obj.actions{obj.currentAction}.name;
+            name = obj.actions(obj.currentAction_idx).name;
         end
+        
     end
 end

@@ -6,6 +6,7 @@ classdef Task < handle
         A = []       % task internal activation function
         ID
         task_name
+        is_kin_constraint = false
     end
 
     methods (Abstract)

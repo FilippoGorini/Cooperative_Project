@@ -1,48 +1,47 @@
 classdef MinEffectorAltitudeTask < Task
+    % Task to keep EE frame at a minimum altitude from a predefined
+    % obstacle. The obstacle height can be changed in runtime and the
+    % transitions will happen smoothly over a period of 3 seconds
+
+    % NB: MAYBE WE SHOULD CHANGE THE CONTROL POINT FROM THE EE TO THE
+    % TOOL!!!!!!!
+
     properties
-        % --- Task parameters ---
-        h_min   = 0.15;   % Minimum allowed altitude from obstacle
-        buffer  = 0.05;   % Buffer zone size
-        gain    = 1.0;
+        h_min = 0.15;               % Minimum allowed altitude from obstacle
+        buffer = 0.05;              % Buffer zone size
+        gain = 1.0;
 
-        % --- References ---
-        h_star;          % Target altitude when task activates
-        h_current;       % Current altitude relative to obstacle
+        h_star;                     % Target altitude when task activates
+        h_current;                  % Current altitude relative to obstacle
 
-        % --- Obstacle (table) height ---
-        h_obstacle         = 0.55;   % Current obstacle height
-        h_obstacle_start   = 0.55;   % Height at transition start
-        h_obstacle_target  = 0.55;   % Target height after transition
+        h_obstacle = 0.55;          % Current obstacle height
+        h_obstacle_start = 0.55;    % Height at transition start
+        h_obstacle_target = 0.55;   % Target height after transition
 
-        % --- Transition handling ---
-        transition_duration = 3.0;   % [s]
-        time_since_change   = 0;     % Timer
+        transition_duration = 3.0;  % obstacle height transition time
+        time_since_change = 0;   
     end
 
     methods
+
         function obj = MinEffectorAltitudeTask(robot_ID, taskID)
             obj.ID        = robot_ID;
             obj.task_name = taskID;
 
-            % Desired safe altitude above obstacle
+            % Desired safe altitude above obstacle (minimum altitude plus buffer)
             obj.h_star = obj.h_min + obj.buffer;
         end
 
-        % -------------------------------------------------------------
-        % Change obstacle height with smooth transition
-        % -------------------------------------------------------------
+        % Method to set a new obstacle height, to which we will transition smoothly
         function setObstacleHeight(obj, new_height)
             obj.h_obstacle_start  = obj.h_obstacle;
             obj.h_obstacle_target = new_height;
             obj.time_since_change = 0;
         end
 
-        % -------------------------------------------------------------
-        % Reference update
-        % -------------------------------------------------------------
         function updateReference(obj, robot_system)
 
-            % ---- Update obstacle height smoothly ----
+            % Logic for obstacle height smoothing
             if obj.time_since_change < obj.transition_duration
                 obj.time_since_change = min( ...
                     obj.time_since_change + robot_system.dt, ...
@@ -55,8 +54,8 @@ classdef MinEffectorAltitudeTask < Task
                     obj.h_obstacle = DecreasingBellShapedFunction( ...
                         0, ...
                         obj.transition_duration, ...
-                        obj.h_obstacle_target, ... % ymin (final)
-                        obj.h_obstacle_start,  ... % ymax (initial)
+                        obj.h_obstacle_target, ...      % ymin (final)
+                        obj.h_obstacle_start,  ...      % ymax (initial)
                         t);
                 else
                     % Increasing transition
@@ -71,22 +70,21 @@ classdef MinEffectorAltitudeTask < Task
                 obj.h_obstacle = obj.h_obstacle_target;
             end
 
-            % ---- Select correct arm ----
-            if strcmp(obj.ID, 'L')
+            if obj.ID == 'L'
                 robot = robot_system.left_arm;
-            elseif strcmp(obj.ID, 'R')
+            elseif obj.ID == 'R'
                 robot = robot_system.right_arm;
             else
                 error('Unknown robot ID');
             end
 
-            % ---- Compute current relative altitude ----
+            % Compute current relative altitude
             obj.h_current = robot.wTe(3,4) - obj.h_obstacle;
 
-            % ---- Velocity reference (1D task) ----
+            % Reference
             obj.xdotbar = obj.gain * (obj.h_star - obj.h_current);
 
-            % ---- Safety saturation ----
+            % Saturate
             obj.xdotbar = Saturate(obj.xdotbar, 0.2);
         end
 
@@ -95,10 +93,9 @@ classdef MinEffectorAltitudeTask < Task
         % -------------------------------------------------------------
         function updateJacobian(obj, robot_system)
 
-            % Select correct arm
-            if strcmp(obj.ID, 'L')
+            if obj.ID == 'L'
                 robot = robot_system.left_arm;
-            elseif strcmp(obj.ID, 'R')
+            elseif obj.ID == 'R'
                 robot = robot_system.right_arm;
             else
                 error('Unknown robot ID');
@@ -107,31 +104,17 @@ classdef MinEffectorAltitudeTask < Task
             % Now the jacobian is for one arm only (1x7 instead of 1x14):
             obj.J = robot.wJe(6, :);
 
-            % % Extract Z linear velocity Jacobian
-            % % wJe = [ang; lin] → linear Z is row 6
-            % Jz = robot.wJe(6, :);
-            % 
-            % 
-            % % Build full Jacobian (1x14)
-            % if strcmp(obj.ID, 'L')
-            %     obj.J = [Jz, zeros(1, 7)];
-            % else
-            %     obj.J = [zeros(1, 7), Jz];
-            % end
-            
         end
 
-        % -------------------------------------------------------------
-        % Activation update
-        % -------------------------------------------------------------
         function updateActivation(obj, robot_system)
             % Activation depends only on relative altitude
-            obj.A = DecreasingBellShapedFunction( ...
-                obj.h_min, ...
-                obj.h_min + obj.buffer, ...
-                0, ...
-                1, ...
-                obj.h_current);
+            obj.A = DecreasingBellShapedFunction(obj.h_min, ...
+                                                    obj.h_min + obj.buffer, ...
+                                                    0, ...
+                                                    1, ...
+                                                    obj.h_current);
         end
+
     end
+    
 end

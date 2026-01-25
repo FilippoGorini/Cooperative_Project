@@ -12,28 +12,29 @@ function main()
     real_robot = false;
 
     % Simulation Parameters
-    dt = 0.005;
-    end_time = 40;
+    dt = 0.001;     % lowering the dt seems to decrease the drifting error between the 2 grippers in the bimanual manipulation phase
+    end_time = 20;
     
     % Print on terminal parameters
-    print_frequency = 2;
+    print_frequency = 4;
     print_interval = 1 / print_frequency;
     last_print_time = 0;
 
     % Action manager parameters
-    action_transition_duration = 1;     % 1 second 
+    action_transition_duration = 1.0;     % 1 second 
     n_dofs = 14;
 
     % Cartesian error thresholds for tool and obj
-    ang_error_threshold = 0.02;
+    ang_error_threshold = 0.01;
     lin_error_threshold = 0.001;
-    obj_ang_error_threshold = 0.02;
-    obj_lin_error_threshold = 0.001;
+    obj_ang_error_threshold = 0.01;
+    obj_lin_error_threshold = 0.01;
     % Table edge threshold: we assumed that the object lies on a table,
     % which the robot has to avoid while moving the object to the object
     % goal position. After the robot clears the table edge, the minimum
     % altitude is computed wrt the floor instead of the table
     table_edge_threshold = 0.58; 
+    table_height = 0.55;
 
     % Initialize Franka Emika Panda Model
     model = load("panda.mat");
@@ -60,8 +61,10 @@ function main()
     offset = (obj_length/2) - 0.01;     % offset with a margin to not take the obj exactly at the end
     linear_offset = [offset 0 0]';
     % Set goal frames for left and right arm, based on object frame
+    % left_arm.setGoal(w_obj_pos, w_obj_ori, -linear_offset, rotation(pi, -pi/6, 0));    
+    % right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, pi/6, 0));
     left_arm.setGoal(w_obj_pos, w_obj_ori, -linear_offset, rotation(pi, -pi/6, 0));    
-    right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, pi/6, 0));
+    right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/6, pi));   % With this pose we avoid making the right EE turn and collide with the left one
 
     % Define Object goal frame for bimanual motion of the object
     wTog = [rotation(0, 0, 0) [0.65, -0.35, 0.28]'; 0 0 0 1];
@@ -77,20 +80,21 @@ function main()
     right_tool_task = ToolTask("R", "Right Tool");
 
     % Joint limits task
-    % left_joint_task = JointLimitsIndividualTask("L", "LJL");
-    % right_joint_task = JointLimitsIndividualTask("R", "RJL");
     joint_limits_task = JointLimitsTask("BM", "Joint Limits");
  
     % Task minimum altitude
     left_min_alt_task = MinEffectorAltitudeTask("L", "Left Min. Alt.");
+    left_min_alt_task.setObstacleHeight(table_height);
     right_min_alt_task = MinEffectorAltitudeTask("R", "Right Min. Alt.");
+    right_min_alt_task.setObstacleHeight(table_height);
 
     % Task object kinematic constraint (unique for both arms)
     kin_constraint_task = KinConstraintTask("BM", "Kinematic Constraint");
 
     % Task object
-    object_task = ObjectTaskMasterSlave("BM", "Object"); 
-    % object_task = ObjectTaskSymmetric("BM", "Object");
+    % left_object_task = ObjectTaskIndividual("L", "Object"); 
+    % right_object_task = ObjectTaskIndividual("R", "Object");
+    object_task = ObjectTaskDual("BM", "Object");
 
     % ---------------
     % --- ACTIONS ---
@@ -100,7 +104,7 @@ function main()
     % tasks to the action is not relevant for priorities, which are decided
     % in the unified list instead
     action_move_to = Action("MoveTo", {joint_limits_task, ...
-                                            left_min_alt_task, right_min_alt_task ...
+                                            left_min_alt_task, right_min_alt_task, ...
                                             left_tool_task, right_tool_task});
     action_move_obj = Action("MoveObj", {kin_constraint_task, ...
                                             joint_limits_task, ...
@@ -131,12 +135,8 @@ function main()
     logger = SimulationLogger(ceil(end_time/dt)+1, bm_sim, unified_list);
 
     % Flags 
-    mission_completed = false;
     table_edge_passed = false;
 
-    % ===========================
-    %    MAIN SIMULATION LOOP
-    % ===========================
     for t = 0:dt:end_time
         
         % Receive UDP packets - DO NOT EDIT
@@ -161,9 +161,9 @@ function main()
                 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)
-                    fprintf('Current action: MoveTo | t = %.2f s\n', t);
-                    fprintf('  Left Arm : Lin Err = %.4f m | Ang Err = %.4f rad\n', left_lin_error, left_ang_error);
-                    fprintf('  Right Arm: Lin Err = %.4f m | Ang Err = %.4f rad\n', right_lin_error, right_ang_error);
+                    fprintf('ACTION: MoveTo [%.2f s]\n', t);
+                    fprintf('  Left Arm Tool: Lin Err = %.4f m | Ang Err = %.4f rad\n', left_lin_error, left_ang_error);
+                    fprintf('  Right Arm Tool: Lin Err = %.4f m | Ang Err = %.4f rad\n', right_lin_error, right_ang_error);
                     fprintf('\n');
                     last_print_time = t;
                 end
@@ -172,7 +172,9 @@ function main()
                 if (left_ang_error < ang_error_threshold) && (left_lin_error < lin_error_threshold) && ...
                    (right_ang_error < ang_error_threshold) && (right_lin_error < lin_error_threshold)
                    
-                    disp(['Target Reached at t = ' num2str(t) '. Switching to MoveObj.']);
+                    fprintf('TOOL GOALS REACHED [%.2f s]\n', t);
+                    fprintf('  Switch to action: MoveObj\n');
+                    fprintf('\n');
                              
                     % Compute current obj position relative to current arm pose
                     tTo_L = invT(left_arm.wTt) * wTo_obj;
@@ -205,7 +207,10 @@ function main()
                     right_min_alt_task.setObstacleHeight(0);
                     
                     table_edge_passed = true;
-                    disp(['t = ' num2str(t) ' - Table edge cleared.']);
+                    
+                    fprintf('TABLE EDGE CLEARED [%.2f s]\n', t);
+                    fprintf('  Obstacle height set to 0 (Ground).\n');
+                    fprintf('\n');
                 end
                 
                 % Compute object error for both arms
@@ -219,7 +224,7 @@ function main()
 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)
-                    fprintf('Current action: MoveObj | t = %.2f s\n', t);
+                    fprintf('ACTION: MoveObj [%.2f s]\n', t);
                     fprintf('  Obj (Left Est) : Lin Err = %.4f m | Ang Err = %.4f rad\n', left_obj_lin_err, left_obj_ang_err);
                     fprintf('  Obj (Right Est): Lin Err = %.4f m | Ang Err = %.4f rad\n', right_obj_lin_err, right_obj_ang_err);
                     fprintf('\n'); 
@@ -230,21 +235,19 @@ function main()
                 if (left_obj_ang_err < obj_ang_error_threshold) && (left_obj_lin_err < obj_lin_error_threshold) && ...
                    (right_obj_ang_err < obj_ang_error_threshold) && (right_obj_lin_err < obj_lin_error_threshold)
                    
-                    disp(['Object moved to position at t = ' num2str(t) '. Switching to Stop.']);
+                    fprintf('OBJECT GOAL REACHED [%.2f s]\n', t);
+                    fprintf('  Switch to action: Stop\n');
+                    fprintf('\n');
                     
                     % Switch to stop action
                     actionManager.setCurrentAction("Stop");
                 end
 
             case "Stop"
-                if ~mission_completed
-                    disp("MISSION COMPLETED");
-                    mission_completed = true;
-                end
                 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)
-                    fprintf('Current action: Stop | t = %.2f s\n', t);
+                    fprintf('ACTION: Stop [%.2f s]\n', t);
                     last_print_time = t;
                 end
 

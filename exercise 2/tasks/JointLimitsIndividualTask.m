@@ -1,88 +1,79 @@
 classdef JointLimitsIndividualTask < Task   
-    % Task per gestire i limiti di giunto del robot (Inequality Task)
+    % Task to control the joint limits of a single arm
     properties
-        % Limiti di giunto in radianti
+        % Joint limits in radians
         q_min
         q_max
         
-        % Zona di sicurezza (buffer) prima del limite effettivo
+        % Safety buffer size near the joint limit
         buffer_zone 
         
-        % Guadagno per la velocità di rientro
-        kp = 1.0; 
+        gain = 1.0; 
     end
     
     methods
+
         function obj = JointLimitsIndividualTask(robot_ID, taskID)
-            % Costruttore: Inizializza ID e limiti del Franka Panda
             obj.ID = robot_ID;
             obj.task_name = taskID;
-            
-            % Conversione da gradi a radianti
-            deg2rad = pi/180;
-            
-            % Limiti dal Datasheet Franka Emika Panda
-            % A1, A2, A3, A4, A5, A6, A7
+
+            % Joint limits from datasheet (we could also take them from the
+            % robot model instead if we pass it as an argument to the
+            % constructor)
             limits_deg_min = [-166, -101, -166, -176, -166,  -1, -166];
             limits_deg_max = [ 166,  101,  166,   -4,  166, 215,  166];
             
-            obj.q_min = limits_deg_min' * deg2rad;
-            obj.q_max = limits_deg_max' * deg2rad;
+            obj.q_min = deg2rad(limits_deg_min');
+            obj.q_max = deg2rad(limits_deg_max');
             
-            % Definiamo un buffer di sicurezza (es. 10 gradi)
-            obj.buffer_zone = 10 * deg2rad; 
+            % 10 degrees buffer zone near the limit (converted in radians)
+            obj.buffer_zone = deg2rad(10); 
         end
         
         function updateReference(obj, robot_system)
-            % Seleziona il braccio corretto
-            if(obj.ID == 'L')
+
+            if obj.ID == 'L'
                 robot = robot_system.left_arm;
-            elseif(obj.ID == 'R')
+            elseif obj.ID == 'R'
                 robot = robot_system.right_arm;    
             end
             
             q = robot.q;
-            obj.xdotbar = zeros(7,1); % Inizializza velocità riferimento a zero
+            obj.xdotbar = zeros(7,1); 
             
-            % Calcola la velocità repulsiva per ogni giunto
+            % Compute reference velocities for each joint
             for i = 1:7
-                % CASO 1: Vicino al limite MINIMO
+                % If we are near the min limit:
                 if q(i) < (obj.q_min(i) + obj.buffer_zone)
-                    % Obiettivo: tornare verso il buffer
-                    q_target = obj.q_min(i) + obj.buffer_zone;
-                    obj.xdotbar(i) = obj.kp * (q_target - q(i));
+                    q_star = obj.q_min(i) + obj.buffer_zone;
+                    obj.xdotbar(i) = obj.gain * (q_star - q(i));
                     
-                % CASO 2: Vicino al limite MASSIMO
+                % If we are near the max limit:
                 elseif q(i) > (obj.q_max(i) - obj.buffer_zone)
-                    % Obiettivo: tornare indietro verso il buffer
-                    q_target = obj.q_max(i) - obj.buffer_zone;
-                    obj.xdotbar(i) = obj.kp * (q_target - q(i)); % Sarà negativo
+                    q_star = obj.q_max(i) - obj.buffer_zone;
+                    obj.xdotbar(i) = obj.gain * (q_star - q(i)); 
                 end
             end
             
-            % Saturazione di sicurezza per evitare scatti violenti
-            obj.xdotbar = Saturate(obj.xdotbar, 0.5);
+            % Saturate
+            obj.xdotbar = Saturate(obj.xdotbar, 0.2);
         end
                
         function updateJacobian(obj, robot_system)
-            % Il Jacobiano per i joint limits è semplicemente una matrice Identità
-            % (vogliamo controllare direttamente qdot).
-            
-            % Costruiamo il Jacobiano esteso per il sistema (14 DOF)
+            % For joint limits the jacobian is a simple identity (qdot
+            % directly affects qdot as they're the same)
             if obj.ID == 'L'
-                % Parte sinistra Identity, parte destra Zeri
                 obj.J = [eye(7), zeros(7,7)];
             elseif obj.ID == 'R'
-                % Parte sinistra Zeri, parte destra Identity
                 obj.J = [zeros(7,7), eye(7)];
             end
         end
 
         function updateActivation(obj, robot_system)
-            % Seleziona il braccio
-            if(obj.ID == 'L')
+
+            if obj.ID == 'L'
                 robot = robot_system.left_arm;
-            elseif(obj.ID == 'R')
+            elseif obj.ID == 'R'
                 robot = robot_system.right_arm;    
             end
             
@@ -93,24 +84,26 @@ classdef JointLimitsIndividualTask < Task
                 alpha_low = 0;
                 alpha_high = 0;
                 
-                % Attivazione Limite Inferiore (Decreasing)
-                % 1 se siamo sul limite, 0 se siamo al sicuro (limite + buffer)
+                % Lower limit activation
+                % 1 if we are on the limit, 0 if we are safe (limit + buffer)
                 if q(i) < (obj.q_min(i) + obj.buffer_zone)
                      alpha_low = DecreasingBellShapedFunction(obj.q_min(i), obj.q_min(i) + obj.buffer_zone, 0, 1, q(i));
                 end
                 
-                % Attivazione Limite Superiore (Increasing)
-                % 0 se siamo al sicuro (limite - buffer), 1 se siamo sul limite
+                % Upper limit activation
+                % 0 if we're safe (limit - buffer), 1 if we are on the limit
                 if q(i) > (obj.q_max(i) - obj.buffer_zone)
                      alpha_high = IncreasingBellShapedFunction(obj.q_max(i) - obj.buffer_zone, obj.q_max(i), 0, 1, q(i));
                 end
                 
-                % L'attivazione finale è la massima tra le due (non possono avvenire insieme)
+                % Take max between the 2 as final activation
                 activations(i) = max(alpha_low, alpha_high);
             end
             
-            % La matrice di attivazione è diagonale (ogni giunto è indipendente)
+            % Diagonal activation matrix
             obj.A = diag(activations);
         end
+
     end
+    
 end

@@ -143,7 +143,7 @@ classdef ActionManager < handle
                 end
                 
                 % Perform ICAT Step considering each task's transition
-                % activatiob
+                % activation
                 [Qp, ydotbar] = iCAT_task(trans_act * task.A, task.J, ...
                                            Qp, ydotbar, task.xdotbar, ...
                                            1e-4, 0.01, 10);

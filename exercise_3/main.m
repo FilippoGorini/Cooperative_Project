@@ -8,7 +8,7 @@ function main()
 
 
     % Simulation Parameters
-    dt = 0.005;
+    dt = 0.001;
     end_time = 20;
 
     % Thresholds
@@ -24,13 +24,13 @@ function main()
     real_robot = false;
     
     % Initiliaze panda_arm() Class, specifying the base offset w.r.t World Frame
-    left_arm = panda_arm(model,eye(4));
+    left_arm = PandaArm(model,eye(4));
     % Transform from world frame to arm2 base frame
     wTb2 = [-1  0   0   1.06;
             0   -1  0   -0.01;
             0   0   1   0;
             0   0   0   1];
-    right_arm = panda_arm(model, wTb2);
+    right_arm = PandaArm(model, wTb2);
     
     % Initialize Cooperative Simulator Class
     coop_system = coop_sim(dt, left_arm, right_arm, end_time);
@@ -48,13 +48,13 @@ function main()
 
     % The goal orientation of the tool frames is obtained by rotating the tool frames 20 deg (pi/9) around their y-axis
     left_arm.setGoal(w_obj_pos, w_obj_ori, -linear_offset, rotation(pi, -pi/9, 0));
-    right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, pi/9, 0));
+    right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/9, pi));
     
     % Define Object goal frame (Cooperative Motion)
     % wTog=[rotation(0,0,0) [0.6, -0.4, 0.48]'; 0 0 0 1];   
     wTog=[rotation(0,0,0) [0.6, 0.4, 0.48]'; 0 0 0 1];
-    left_arm.set_obj_goal(wTog);
-    right_arm.set_obj_goal(wTog);
+    left_arm.setObjGoal(wTog);
+    right_arm.setObjGoal(wTog);
     
     % Define Tasks, input values(Robot type(L,R,BM), Task Name)
 
@@ -102,11 +102,11 @@ function main()
     % of the algorithm)
 
     left_action_manager = ActionManager(dt, 7, action_transition_duration);
-    left_action_manager.addTaskSet(left_global_list);
+    left_action_manager.addUnifiedList(left_global_list);
     left_action_manager.addAction(left_move_to_action);
 
     right_action_manager = ActionManager(dt, 7, action_transition_duration);
-    right_action_manager.addTaskSet(right_global_list);
+    right_action_manager.addUnifiedList(right_global_list);
     right_action_manager.addAction(right_move_to_action);
     
     % Initiliaze robot interface
@@ -161,14 +161,14 @@ function main()
                     tTo_R = invT(right_arm.wTt) * wTo_start;
                     
                     % 3. Set the grasp transforms in the robot objects
-                    left_arm.set_grasp_transform(tTo_L);
-                    right_arm.set_grasp_transform(tTo_R);
+                    left_arm.setObjToolTransform(tTo_L);
+                    right_arm.setObjToolTransform(tTo_R);
                 
-                    left_arm.update_transform();
-                    right_arm.update_transform();
+                    left_arm.updateTransform();
+                    right_arm.updateTransform();
     
-                    left_arm.update_jacobian();
-                    right_arm.update_jacobian();
+                    left_arm.updateJacobian();
+                    right_arm.updateJacobian();
                     
                     % 4. Switch Action
                     left_action_manager.setCurrentAction("LeftMoveObj");

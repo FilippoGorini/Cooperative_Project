@@ -12,9 +12,9 @@ classdef ToolTask < Task
         end
 
         function updateReference(obj, robot_system)
-            if(obj.ID=='L')
+            if (obj.ID=='L')
                 robot=robot_system.left_arm;
-            elseif(obj.ID=='R')
+            elseif (obj.ID=='R')
                 robot=robot_system.right_arm;    
             end
          [v_ang, v_lin] = CartError(robot.wTg , robot.wTt);
@@ -27,9 +27,9 @@ classdef ToolTask < Task
         end
         
         function updateJacobian(obj,robot_system)
-            if(obj.ID=='L')
+            if (obj.ID=='L')
                 robot=robot_system.left_arm;
-            elseif(obj.ID=='R')
+            elseif (obj.ID=='R')
                 robot=robot_system.right_arm;    
             end
             tool_jacobian=robot.wJt;
