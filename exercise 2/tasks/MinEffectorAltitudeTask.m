@@ -4,7 +4,7 @@ classdef MinEffectorAltitudeTask < Task
     % transitions will happen smoothly over a period of 3 seconds
 
     % NB: MAYBE WE SHOULD CHANGE THE CONTROL POINT FROM THE EE TO THE
-    % TOOL!!!!!!!
+    % TOOL!!!!!!! (BOTH REFERENCE AND JACOBIAN METHOD WOULD NEED UPDATE)
 
     properties
         h_min = 0.15;               % Minimum allowed altitude from obstacle
@@ -73,9 +73,7 @@ classdef MinEffectorAltitudeTask < Task
             if obj.ID == 'L'
                 robot = robot_system.left_arm;
             elseif obj.ID == 'R'
-                robot = robot_system.right_arm;
-            else
-                error('Unknown robot ID');
+                robot = robot_system.right_arm;    
             end
 
             % Compute current relative altitude
@@ -93,9 +91,7 @@ classdef MinEffectorAltitudeTask < Task
             if obj.ID == 'L'
                 robot = robot_system.left_arm;
             elseif obj.ID == 'R'
-                robot = robot_system.right_arm;
-            else
-                error('Unknown robot ID');
+                robot = robot_system.right_arm;    
             end
 
             % Extract Z linear velocity Jacobian

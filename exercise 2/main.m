@@ -55,7 +55,7 @@ function main()
     obj_length = 0.10;
     w_obj_pos = [0.5 0 0.59]';
     w_obj_ori = rotation(0, 0, 0);
-    wTo_obj = [w_obj_ori, w_obj_pos; 0 0 0 1];
+    wTo_start = [w_obj_ori, w_obj_pos; 0 0 0 1];
 
     % Compute tool goal frame offset wrt to object frame
     offset = (obj_length/2) - 0.01;     % offset with a margin to not take the obj exactly at the end
@@ -181,8 +181,8 @@ function main()
                     fprintf('\n');
                              
                     % Compute current obj position relative to current arm pose
-                    tTo_L = invT(left_arm.wTt) * wTo_obj;
-                    tTo_R = invT(right_arm.wTt) * wTo_obj;
+                    tTo_L = invT(left_arm.wTt) * wTo_start;
+                    tTo_R = invT(right_arm.wTt) * wTo_start;
                     
                     % Set the obj/tool transforms 
                     left_arm.setObjToolTransform(tTo_L);
