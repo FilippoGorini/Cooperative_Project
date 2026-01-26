@@ -13,7 +13,7 @@ function main()
 
     % Simulation Parameters
     dt = 0.001;     % lowering the dt seems to decrease the drifting error between the 2 grippers in the bimanual manipulation phase
-    end_time = 20;
+    end_time = 15;
     
     % Print on terminal parameters
     print_frequency = 4;
@@ -96,6 +96,9 @@ function main()
     % right_object_task = ObjectTaskIndividual("R", "Object");
     object_task = ObjectTaskDual("BM", "Object");
 
+    % Stop joints task
+    zero_joint_vel_task = ZeroJointVelTask("BM", "Zero Velocities");
+
     % ---------------
     % --- ACTIONS ---
     % ---------------
@@ -110,15 +113,16 @@ function main()
                                             joint_limits_task, ...
                                             left_min_alt_task, right_min_alt_task, ...
                                             object_task});
-    action_stop = Action("Stop", {joint_limits_task, ...
-                                            left_min_alt_task, right_min_alt_task});
+    action_stop = Action("Stop", {left_min_alt_task, right_min_alt_task, ...
+                                            zero_joint_vel_task});
 
     % Order defines priority { HIGHEST , ... , lowest}
     unified_list = {kin_constraint_task, ...
                     joint_limits_task, ...
                     left_min_alt_task, right_min_alt_task, ...
+                    left_tool_task, right_tool_task, ...
                     object_task, ...
-                    left_tool_task, right_tool_task};
+                    zero_joint_vel_task};
 
     % Load Action Manager Class and load actions
     actionManager = ActionManager(dt, n_dofs, action_transition_duration);
@@ -270,4 +274,14 @@ function main()
     end
 
     logger.plotAll();
+    
 end
+
+
+
+
+
+
+
+
+

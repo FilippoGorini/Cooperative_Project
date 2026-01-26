@@ -88,7 +88,7 @@ classdef SimulationLogger < handle
             
             % --- FIGURE 3: Task Reference Velocities ---
             figure(3); clf;
-            sg_h = sgtitle('Task Reference Velocities ($\dot{x}_{bar}$)'); latex_set(sg_h);
+            sg_h = sgtitle('Task Reference Velocities ($\dot{\bar{x}}$)'); latex_set(sg_h);
             nt = length(task_indices);
             
             for i = 1:nt
