@@ -5,7 +5,6 @@ classdef Task < handle
         J = []       % task Jacobian
         A = []       % task internal activation function
 
-        ID
         task_name
     end
 

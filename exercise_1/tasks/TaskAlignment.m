@@ -1,62 +1,58 @@
 classdef TaskAlignment < Task   
     properties
         theta
-        d_vec       % Salviamo il vettore per la skew matrix
-        dist        % Salviamo la norma per il denominatore
-        n
-        yaw_matrix = [zeros(3,2), [0; 0; 1]] 
+        w_n
+        w_d 
+        v_n
+        v_d
         gain = 0.3
     end
     methods
+        function obj = TaskAlignment(name)
+            obj.task_name = name;
+        end
+
         function updateReference(obj, robot)
-            i_v = [1; 0; 0];
-            
-            % 1. Calcolo errore lineare e proiezione
+            w_P = eye(3) - [0; 0; 1]*[0 0 1];
             [~, w_lin] = CartError(robot.wTg , robot.wTv);
-            w_lin(3) = 0; 
-            obj.d_vec = wTv(1:3,1:3)' * w_lin;  % project w_lin in veichle frame
-            obj.dist = norm(w_lin);
-            
-            % 2. Direzione asse x veicolo
-            w_iv = robot.wTv(1:3,1:3) * i_v;
-            
-            % 3. Normalizzazione direzione target
-            if obj.dist > 1e-4
-                n_d = obj.d_vec / obj.dist; 
-            else
-                n_d = w_iv; % Errore nullo se siamo sopra
-            end
-        
-            % 4. Calcolo angolo con atan2 (robusto per il segno)
-            sin_theta = w_iv(1)*n_d(2) - w_iv(2)*n_d(1); 
-            cos_theta = w_iv(1)*n_d(1) + w_iv(2)*n_d(2); 
+            obj.w_d = w_P * w_lin;
+            obj.v_d = robot.wTv(1:3,1:3)' * obj.w_d;
+
+            v_i_v = [1; 0; 0];
+            w_iv = robot.wTv(1:3,1:3) * v_i_v;
+
+            w_nd = obj.w_d/norm(obj.w_d);
+
+            obj.w_n = cross(w_iv,w_nd);
+
+            sin_theta = norm(obj.w_n);
+            cos_theta = w_iv' * w_nd;
             obj.theta = atan2(sin_theta, cos_theta);
-            
-            % 5. Asse di rotazione (sempre Z per lo yaw)
-            obj.n = [0; 0; 1];
-            
-            % 6. Velocità di riferimento
-            obj.xdotbar = obj.gain * obj.theta;
+
+            if sin_theta < 1e-5
+                obj.w_n = [0; 0; 1];
+            else
+                obj.w_n = obj.w_n/sin_theta;
+            end
+
+            obj.v_n = robot.wTv(1:3,1:3)' * obj.w_n;          
+
+            % I can do with rho (obj.theta * obj.v_n)
+            obj.xdotbar = - obj.gain * obj.theta;
             obj.xdotbar = Saturate(obj.xdotbar, 0.2);
+
         end
         
         function updateJacobian(obj, robot)
-            % Protezione contro divisione per zero
-            if obj.dist < 1e-3
-                obj.J = zeros(1, 13);
-                return;
-            end
+            % obj.J = (obj.v_n * obj.v_n' - (obj.theta/sin(obj.theta)) * skew([1;0;0]) * skew(obj.v_d/norm(obj.v_d)) * (eye(3) - (obj.v_n * obj.v_n'))) * [zeros(3,7), -(1/norm(obj.v_d)^2)*skew(obj.v_d), -eye(3)];
+
+            J_linear_veh = -(1/norm(obj.v_d)^2) * skew(obj.v_d);
             
-            % Formula corretta: n' * [ 0_arm | J_linear_veh | J_angular_veh ]
-            % Nota: usiamo obj.d_vec (vettore) dentro skew
-            J_linear_veh = -(1/(obj.dist^2)) * skew(obj.d_vec);
-            J_angular_veh = -obj.yaw_matrix;
-            
-            obj.J = obj.n' * [zeros(3,7), J_linear_veh, J_angular_veh];
+            obj.J = obj.v_n' * [zeros(3,7), J_linear_veh, -eye(3)];
         end
         
         function updateActivation(obj, robot)
-            obj.A = 1;
+            obj.A = 1; % eye(3)
         end
     end
 end

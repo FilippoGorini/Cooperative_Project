@@ -1,10 +1,14 @@
 classdef TaskVehiclePos < Task   
     properties
-        gain = 0.4
+        gain = 1
     end
 
 
     methods
+        function obj = TaskVehiclePos(name)
+            obj.task_name = name;
+        end
+
         function updateReference(obj, robot)
             % In this task our control variable x is the cartesian distance
             % only (no orientation), so it is a 3x1 vector, therefore xdot

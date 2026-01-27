@@ -8,6 +8,10 @@ classdef TaskVehicleOrient < Task
 
 
     methods
+        function obj = TaskVehicleOrient(name)
+            obj.task_name = name;
+        end
+
         function updateReference(obj, robot)
             % Compute misalignment vector projected on <w>
             [obj.rho, ~] = CartError(robot.wTv, robot.wTgv);
@@ -18,7 +22,7 @@ classdef TaskVehicleOrient < Task
         end
 
         function updateJacobian(obj, robot)
-            obj.J = robot.wTv(1:3,1:3) * [zeros(3,10), eye(3)];
+            obj.J = robot.wTv(1:3,1:3)' * [zeros(3,10), eye(3)];
         end
         
         function updateActivation(obj, robot)

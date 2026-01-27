@@ -9,12 +9,12 @@ classdef TaskAltitudeControl < Task
     end
     
     methods
-
-        function obj = TaskAltitudeControl(inputType)
-            obj = obj@Task(); 
-            if nargin == 1
+        function obj = TaskAltitudeControl(name,inputType)
                 obj.type = inputType;
-            end
+                obj.task_name = name;
+                if inputType == 0
+                    obj.gain = 0.05;
+                end
         end
 
         function updateReference(obj, robot)
@@ -26,7 +26,10 @@ classdef TaskAltitudeControl < Task
         end
 
         function updateJacobian(obj, robot)
-            obj.J = [zeros(1,7) 0 0 1 0 0 0];
+            vRw = robot.vTw(1:3, 1:3);        
+            v_k_w = vRw * [0; 0; 1];         
+            J_a = v_k_w' * [zeros(3,7), eye(3), zeros(3,3)];  
+            obj.J = J_a;                         
         end
 
         function updateActivation(obj, robot)

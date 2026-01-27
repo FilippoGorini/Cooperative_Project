@@ -8,28 +8,31 @@ clc; clear; close all;
 
 % --- Simulation parameters ---
 dt             = 0.05;      
-endTime        = 200;
+endTime        = 250;
 trans_duration = 5.0;         % 5 s transition duration between actions
 n_dofs         = 13;          % 6 (vehicle) + 7 (arm)
 
 % --- Initialize robot model and simulator ---
 robotModel = UvmsModel(); 
 % Set initial conditions
-%robotModel.eta = [48.5 11.5 -33 0 0 pi/2]';
-robotModel.eta = [10.5 11.5 -33 0 0 pi/2]';
+robotModel.eta = [10.5 35.5 -36 -pi/3 pi/3 pi/2]';
 sim = UvmsSim(dt, robotModel, endTime);
 
 % Initialize Unity interface
 unity = UnityInterface("127.0.0.1");
 
 % --- TASKS ---
-task_vehicle_pos      = TaskVehiclePos();
-task_vehicle_orient   = TaskVehicleOrient();
-task_horizontal_att   = TaskHorizontalAtt();
-task_altitude_min     = TaskAltitudeControl(1); 
+task_vehicle_pos      = TaskVehiclePos("Vehicle Position");
+task_vehicle_orient   = TaskVehicleOrient("Vehicle Orientation");
+task_horizontal_att   = TaskHorizontalAtt("Horizontal Attitude");
+task_altitude_min     = TaskAltitudeControl("Minimum Altitude",1); 
 task_altitude_min.set_h_min(1);
-task_altitude_landing = TaskAltitudeControl(0);
+task_altitude_landing = TaskAltitudeControl("Landing Altitude",0);
 task_altitude_landing.set_h_star(0);
+task_alignment        = TaskAlignment("Alignment");
+task_workspace        = TaskWorkSpace("Workspace");
+task_tool             = TaskTool("Tool");
+task_stop             = TaskStop("Stop");
 
 % --- ACTIONS ---
 % Priorities are decided by the unified_list order, not the order here.
@@ -37,20 +40,29 @@ action_safe_navigation = Action("SafeNavigation", ...
     {task_altitude_min, task_vehicle_pos, task_vehicle_orient, task_horizontal_att});
 
 action_landing = Action("Landing", ...
-    {task_altitude_landing, task_vehicle_pos, task_horizontal_att});
+    {task_altitude_landing, task_horizontal_att, task_alignment, task_workspace}); % ho tolto task_vehicle_pos
+
+action_manipulation = Action("Manipulation", ...
+    {task_stop, task_tool});
 
 % --- UNIFIED LIST (Highest to Lowest Priority) ---
-unified_list = {task_altitude_min, ...       
-                task_altitude_landing, ...
-                task_vehicle_pos, ...
-                task_vehicle_orient, ...
-                task_horizontal_att};
+unified_list = {task_stop, ...                % constraint
+                task_altitude_min, ...        % safety
+                task_horizontal_att, ...      % prerequisite
+                task_alignment, ...           % prerequisite
+                task_workspace, ...           % prerequisite
+                task_vehicle_pos, ...         % action def
+                task_vehicle_orient, ...      % action def
+                task_altitude_landing, ...    % action def
+                task_tool                     % action def
+                };
 
 % --- ActionManager Initialization ---
 actionManager = ActionManager(dt, n_dofs, trans_duration);
 actionManager.addUnifiedList(unified_list);
 actionManager.addAction(action_safe_navigation); 
 actionManager.addAction(action_landing); 
+actionManager.addAction(action_manipulation);
 actionManager.setCurrentAction("SafeNavigation"); 
 
 % --- Goals and Thresholds ---
@@ -102,9 +114,15 @@ for step = 1:sim.maxSteps
                 fprintf('  Current Altitude: %.4f m\n', robotModel.altitude);
             end
             
-            % Optional: Add logic to stop simulation if altitude ~ 0
-            if robotModel.altitude < 0.05
-                 % Handle landing completion if necessary
+            if robotModel.altitude < 0.05 && abs(task_alignment.theta) < 0.01
+                 fprintf('LANDING COMPLETED [%.2f s]\n', sim.time);
+                 fprintf('  Switching to: Manipulation\n\n');
+                 actionManager.setCurrentAction("Manipulation");
+            end
+        case "Manipulation"
+            if mod(sim.loopCounter, round(1 / sim.dt)) == 0
+                fprintf('ACTION: Manipulation [t = %.2f s]\n', sim.time);
+                fprintf('  Current Altitude: %.4f m\n', robotModel.altitude);
             end
     end
 

@@ -3,13 +3,17 @@ classdef TaskHorizontalAtt < Task
         n
         theta
         % theta_star is the goal for the equivalent equality task
-        theta_star = 0.1
-        theta_full_activation = 0.2
+        theta_star = 0
+        theta_full_activation = 0.1
         gain = 0.2
     end
 
 
     methods
+        function obj = TaskHorizontalAtt(name)
+            obj.task_name = name;
+        end
+
         function updateReference(obj, robot)
             % In this task our control variable x is the misalignment
             % vector norm (theta) between k_v and k_w so it is a scalar
