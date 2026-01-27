@@ -27,7 +27,7 @@ function main()
 
     % Cartesian error thresholds for tool and obj
     ang_error_threshold = 0.01;
-    lin_error_threshold = 0.002;
+    lin_error_threshold = 0.003;
     obj_ang_error_threshold = 0.01;
     obj_lin_error_threshold = 0.01;
     % Table edge threshold: we assumed that the object lies on a table,
