@@ -27,14 +27,14 @@ function main()
 
     % Cartesian error thresholds for tool and obj
     ang_error_threshold = 0.01;
-    lin_error_threshold = 0.001;
+    lin_error_threshold = 0.002;
     obj_ang_error_threshold = 0.01;
     obj_lin_error_threshold = 0.01;
     % Table edge threshold: we assumed that the object lies on a table,
     % which the robot has to avoid while moving the object to the object
     % goal position. After the robot clears the table edge, the minimum
     % altitude is computed wrt the floor instead of the table
-    table_edge_threshold = 0.58; 
+    table_edge_threshold = 0.25;   
     table_height = 0.55;
     
     % Initialize Franka Emika Panda Model
@@ -67,7 +67,7 @@ function main()
     right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/9, pi));
     
     % Define Object goal frame (Cooperative Motion)
-    wTog = [rotation(0,0,0) [0.6, 0.4, 0.48]'; 0 0 0 1];
+    wTog = [rotation(0, 0, 0) [0.6, 0.4, 0.48]'; 0 0 0 1];
     left_arm.setObjGoal(wTog);
     right_arm.setObjGoal(wTog);
     
@@ -97,9 +97,9 @@ function main()
     left_zero_joint_vel_task = ZeroJointVelTask("L", "Left Zero Velocities");
     right_zero_joint_vel_task = ZeroJointVelTask("R", "Right Zero Velocities");
 
-    % % KINEMATIC CONSTRAINT?????????? BOH
-    % left_kinematic_constraint_task
-    % right_kinematic_constraint_task
+    % COOPERATIVE OBJECT TASK (CONSTRAINT)
+    left_object_task_coop = CoopObjectTask("L", "Left Cooperative Object");
+    right_object_task_coop = CoopObjectTask("R", "Right Cooperative Object");
 
 
     % ---------------
@@ -132,30 +132,35 @@ function main()
                                                         right_zero_joint_vel_task});
     
     % COOPERATIVE ACTIONS
+    left_move_obj_action_coop = Action("LeftMoveObjCoop", {left_object_task_coop, ...
+                                                            left_joint_limits_task, ...
+                                                            left_min_alt_task});
+
+    right_move_obj_action_coop = Action("RightMoveObjCoop", {right_object_task_coop, ...
+                                                            right_joint_limits_task, ...
+                                                            right_min_alt_task});
 
     % NON-COOPERATIVE UNIFIED LISTS
     left_unified_list = {left_joint_limits_task, ...
-                           left_min_alt_task, ...
-                           left_tool_task, ...
-                           left_object_task, ...
-                           left_zero_joint_vel_task};
-    right_unified_list = {right_joint_limits_task, ...
-                           right_min_alt_task, ...
-                           right_tool_task, ...
-                           right_object_task, ...
-                           right_zero_joint_vel_task};
+                            left_min_alt_task, ...
+                            left_tool_task, ...
+                            left_object_task, ...
+                            left_zero_joint_vel_task};
 
-    % COOPERATIVE UNIFIED LISTS
-    % left_unified_list = {left_joint_limits_task, ...
-    %                        left_min_alt_task, ...
-    %                        left_tool_task, ...
-    %                        left_object_task, ...
-    %                        left_zero_joint_vel_task};
-    % right_unified_list = {right_joint_limits_task, ...
-    %                        right_min_alt_task, ...
-    %                        right_tool_task, ...
-    %                        right_object_task, ...
-    %                        right_zero_joint_vel_task};
+    right_unified_list = {right_joint_limits_task, ...
+                            right_min_alt_task, ...
+                            right_tool_task, ...
+                            right_object_task, ...
+                            right_zero_joint_vel_task};
+
+    % COOPERATIVE UNIFIED LISTS (we now put the cooperative constraint task at top priority
+    left_unified_list_coop = {left_object_task_coop, ...
+                                left_joint_limits_task, ...
+                                left_min_alt_task};
+
+    right_unified_list_coop = {right_object_task_coop, ...
+                                right_joint_limits_task, ...
+                                right_min_alt_task};
 
     % TO DO: Create two action manager objects to manage the tasks of a single
     % manipulator (one for the non-cooperative and one for the cooperative steps
@@ -177,19 +182,16 @@ function main()
     right_action_manager.setCurrentAction("RightMoveTo");   % Explicitly start with the MoveTo action
     
     % COOPERATIVE ACTION MANAGERS
-    % left_action_manager_COOP = ActionManager(dt, n_dofs, action_transition_duration);
-    % left_action_manager.addUnifiedList(left_unified_list_COOP);
-    % left_action_manager.addAction(left_move_to_action);
-    % left_action_manager.addAction(left_move_obj_action);
-    % left_action_manager.addAction(left_zero_vel_action);
-    % left_action_manager.setCurrentAction("LeftMoveTo");   % Explicitly start with the MoveTo action
-    % 
-    % right_action_manager_COOP = ActionManager(dt, n_dofs, action_transition_duration);
-    % right_action_manager.addUnifiedList(right_unified_list_COOP);
-    % right_action_manager.addAction(right_move_to_action);
-    % right_action_manager.addAction(right_move_obj_action);
-    % right_action_manager.addAction(right_zero_vel_action);
-    % right_action_manager.setCurrentAction("RightMoveTo");   % Explicitly start with the MoveTo action
+    left_action_manager_coop = ActionManager(dt, n_dofs, action_transition_duration);
+    left_action_manager_coop.addUnifiedList(left_unified_list_coop);
+    left_action_manager_coop.addAction(left_move_obj_action_coop);
+    left_action_manager_coop.setCurrentAction("LeftMoveObjCoop");  
+    % We can set the move obj action already as that's the only action for which we need the cooperative TPIK 
+
+    right_action_manager_coop = ActionManager(dt, n_dofs, action_transition_duration);
+    right_action_manager_coop.addUnifiedList(right_unified_list_coop);
+    right_action_manager_coop.addAction(right_move_obj_action_coop);
+    right_action_manager_coop.setCurrentAction("RightMoveObjCoop");  
     
     % Initiliaze robot interface
     robot_udp = UDP_interface(real_robot);
@@ -216,11 +218,6 @@ function main()
 
         % Update Full kinematics of the bimanual system
         coop_system.update_full_kinematics();
-
-        % TO DO: compute the TPIK for each manipulator with your action
-        % manager
-        [ql_dot] = left_action_manager.computeICAT(coop_system);
-        [qr_dot] = right_action_manager.computeICAT(coop_system);
 
         switch mission_phase
 
@@ -271,11 +268,12 @@ function main()
                 end
 
             case "MoveObj"
-                % Current x position of the left arm, we check just one for
+                % Current y position of the left arm, we check just one for
                 % simplicity as they're kinematically constrained to each other
-                current_obj_x = left_arm.wTo(1,4); 
+                % We take the absolute value assuming table is centered
+                current_obj_y_abs = abs(left_arm.wTo(2,4));
             
-                if current_obj_x > table_edge_threshold && ~table_edge_passed
+                if current_obj_y_abs > table_edge_threshold && ~table_edge_passed
                     % If we cleared the table edge we can now set the
                     % ground as the new obstacle to keep a minimum altitude from
                     left_min_alt_task.setObstacleHeight(0);
@@ -331,23 +329,66 @@ function main()
 
         end
 
-        % 4. TO DO: COOPERATION hierarchy
-        % SAVE THE NON COOPERATIVE VELOCITIES COMPUTED
-    
-        % 5. TO DO: compute the TPIK for each manipulator with your action
-        % manager (with the constrained action to track the coop velocity)
-    
-        % 6. get the two variables for integration
-        coop_system.sim(ql_dot, qr_dot);
+        % Non cooperative TPIK: 
+        qdot_l = left_action_manager.computeICAT(coop_system);
+        qdot_r = right_action_manager.computeICAT(coop_system);
+
+        % Cooperative TPIK (only for cooperative object motion phase)
+        if mission_phase == "MoveObj"
+
+            % Compute non-cooperative OBJECT velocities
+            xdot_l = left_arm.wJo * qdot_l;
+            xdot_r = right_arm.wJo * qdot_r;
+
+            % Compute admissible object frame velocity space of each arm
+            % when standalone acting
+            H_l = left_arm.wJo * pinv(left_arm.wJo);
+            H_r = right_arm.wJo * pinv(right_arm.wJo);
+            
+            % If the robots were actually independent, now is the step
+            % where they would exchange xdot_l, xdot_r, H_l and H_r, but we
+            % can skip it as we already have them in the same program
+
+            % Compute weighting coefficients
+            mu_0 = 0.005;       % Small number > 0
+            mu_l = mu_0 + norm(left_object_task.xdotbar - xdot_l);
+            mu_r = mu_0 + norm(right_object_task.xdotbar - xdot_r);
+            
+            % NB: in a real system where the robots are independent, xdot_hat
+            % is computed (in the exact same way) by both robots, here we
+            % compute it just once for simplicity.
+            xdot_hat = 1 / (mu_l + mu_r) * (mu_l * xdot_l + mu_r * xdot_r);
+            
+            % Compute cartesian constraint
+            C = [H_l, -H_r];
+            % Compute combined unconstrained motion space
+            H_lr = [H_l, zeros(6, 6); zeros(6, 6), H_r];
+
+            % Update CoopObjectTask
+            left_object_task_coop.xdot_hat = xdot_hat;
+            left_object_task_coop.C = C;
+            left_object_task_coop.H_lr = H_lr;
+
+            right_object_task_coop.xdot_hat = xdot_hat;
+            right_object_task_coop.C = C;
+            right_object_task_coop.H_lr = H_lr;
+            
+            % Compute cooperative TPIK with new cooperative velocity constraint
+            qdot_l = left_action_manager_coop.computeICAT(coop_system);
+            qdot_r = right_action_manager_coop.computeICAT(coop_system);
+            
+        end
+
+        coop_system.sim(qdot_l, qdot_r);
         
-        % 6. Send updated state to Pybullet
+        % Send updated state to Pybullet
         robot_udp.send(t, coop_system)
     
-        % 7. Loggging
+        % Logging
         logger_left.update(coop_system.time, coop_system.loopCounter)
         logger_right.update(coop_system.time, coop_system.loopCounter)
         coop_system.time;
-        % 8. Optional real-time slowdown
+        % Optional real-time slowdown
         SlowdownToRealtime(dt);
     end
 

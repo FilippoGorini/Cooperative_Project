@@ -67,7 +67,7 @@ classdef PandaArm < handle
             % TOOL FRAME
             % frame e = frame f = frame 8 = EE
             psi = -44.9949 * (pi/180);      % FIXED ANGLE BETWEEN EE AND TOOL 
-            tool_length = 0.2124;           % FIXED DISTANCE BETWEEN EE AND TOOL
+            tool_length = 0.2104;           % FIXED DISTANCE BETWEEN EE AND TOOL
             eRt = YPRToRot(psi, 0, 0);
             eOt = [0 0 tool_length]';
 

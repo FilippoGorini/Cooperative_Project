@@ -33,7 +33,7 @@ function main()
     % which the robot has to avoid while moving the object to the object
     % goal position. After the robot clears the table edge, the minimum
     % altitude is computed wrt the floor instead of the table
-    table_edge_threshold = 0.58; 
+    table_edge_threshold = 0.25; 
     table_height = 0.55;
 
     % Initialize Franka Emika Panda Model
@@ -61,8 +61,6 @@ function main()
     offset = (obj_length/2) - 0.01;     % offset with a margin to not take the obj exactly at the end
     linear_offset = [offset 0 0]';
     % Set goal frames for left and right arm, based on object frame
-    % left_arm.setGoal(w_obj_pos, w_obj_ori, -linear_offset, rotation(pi, -pi/6, 0));    
-    % right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, pi/6, 0));
     left_arm.setGoal(w_obj_pos, w_obj_ori, -linear_offset, rotation(pi, -pi/6, 0));    
     right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/6, pi));   % With this pose we avoid making the right EE turn and collide with the left one
 
@@ -200,11 +198,12 @@ function main()
 
             case "MoveObj"
 
-                % Current x position of the left arm, we check just one for
+                % Current y position of the left arm, we check just one for
                 % simplicity as they're kinematically constrained to each other
-                current_obj_x = left_arm.wTo(1,4); 
+                % We take the absolute value assuming table is centered
+                current_obj_y_abs = abs(left_arm.wTo(2,4)); 
             
-                if current_obj_x > table_edge_threshold && ~table_edge_passed
+                if current_obj_y_abs > table_edge_threshold && ~table_edge_passed
                     % If we cleared the table edge we can now set the
                     % ground as the new obstacle to keep a minimum altitude from
                     left_min_alt_task.setObstacleHeight(0);
@@ -222,9 +221,9 @@ function main()
                 left_obj_ang_err = norm(left_obj_err_ori);
                 left_obj_lin_err = norm(left_obj_err_lin);
 
-                [right_obj_err_ori, right_obj_err_lin_R] = CartError(right_arm.wTog, right_arm.wTo);
+                [right_obj_err_ori, right_obj_err_lin] = CartError(right_arm.wTog, right_arm.wTo);
                 right_obj_ang_err = norm(right_obj_err_ori);
-                right_obj_lin_err = norm(right_obj_err_lin_R);
+                right_obj_lin_err = norm(right_obj_err_lin);
 
                 % Feedback on terminal
                 if (t - last_print_time > print_interval)

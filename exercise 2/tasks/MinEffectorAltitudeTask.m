@@ -1,7 +1,7 @@
 classdef MinEffectorAltitudeTask < Task
     % Task to keep EE frame at a minimum altitude from a predefined
     % obstacle. The obstacle height can be changed in runtime and the
-    % transitions will happen smoothly over a period of 3 seconds
+    % transitions will happen smoothly
 
     % NB: MAYBE WE SHOULD CHANGE THE CONTROL POINT FROM THE EE TO THE
     % TOOL!!!!!!! (BOTH REFERENCE AND JACOBIAN METHOD WOULD NEED UPDATE)
@@ -18,7 +18,7 @@ classdef MinEffectorAltitudeTask < Task
         h_obstacle_start = 0.55;    % Height at transition start
         h_obstacle_target = 0.55;   % Target height after transition
 
-        transition_duration = 3.0;  % obstacle height transition time
+        transition_duration = 2.0;  % obstacle height transition time
         time_since_change = 0;    
     end
 
