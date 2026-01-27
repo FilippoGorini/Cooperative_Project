@@ -37,13 +37,13 @@ task_stop             = TaskStop("Stop");
 % --- ACTIONS ---
 % Priorities are decided by the unified_list order, not the order here.
 action_safe_navigation = Action("SafeNavigation", ...
-    {task_altitude_min, task_vehicle_pos, task_vehicle_orient, task_horizontal_att});
+    {task_altitude_min, task_horizontal_att, task_vehicle_pos, task_vehicle_orient});
 
 action_alignment = Action("Alignment", ...
     {task_horizontal_att, task_alignment, task_workspace});
 
 action_landing = Action("Landing", ...
-    {task_altitude_landing, task_horizontal_att, task_alignment, task_workspace}); % ho tolto task_vehicle_pos
+    {task_horizontal_att, task_alignment, task_workspace, task_altitude_landing}); 
 
 action_manipulation = Action("Manipulation", ...
     {task_stop, task_tool});
