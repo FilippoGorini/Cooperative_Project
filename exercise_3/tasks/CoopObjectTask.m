@@ -19,10 +19,7 @@ classdef CoopObjectTask < Task
             
             % Compute feasible cooperative velocity vector (12x1)
             xdot_tilde = obj.H_lr * (eye(12) - pinv(obj.C) * obj.C) * [obj.xdot_hat; obj.xdot_hat];
-            disp("L")
-            disp(xdot_tilde(1:6));
-            disp("R")
-            disp(xdot_tilde(7:12));
+
             % Compute reference for arm (6x1)
             if obj.ID == 'L'
                 obj.xdotbar = xdot_tilde(1:6);

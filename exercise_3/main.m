@@ -15,6 +15,14 @@ function main()
     % Simulation Parameters
     dt = 0.001;     % lowering the dt seems to decrease the drifting error between the 2 grippers in the bimanual manipulation phase
     end_time = 15;
+
+    % Stuff for singularity debug
+    % We store the minimum non zero sigma saw by the RegPseudoInverse (if it is lower than 0.01 regularization is applied)
+    n_steps = ceil(end_time/dt) + 1;
+    internal_sigma_left = zeros(1, n_steps);     
+    internal_sigma_right = zeros(1, n_steps);
+    loop_idx = 0;
+    t_coop_start = 0;
     
     % Print on terminal parameters
     print_frequency = 4;
@@ -67,7 +75,7 @@ function main()
     right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/9, pi));
     
     % Define Object goal frame (Cooperative Motion)
-    wTog = [rotation(0, 0, 0) [0.6, 0.4, 0.48]'; 0 0 0 1];
+    wTog = [rotation(0, pi/6, 0) [0.6, 0.4, 0.48]'; 0 0 0 1];
     left_arm.setObjGoal(wTog);
     right_arm.setObjGoal(wTog);
     
@@ -218,6 +226,9 @@ function main()
 
         % Update Full kinematics of the bimanual system
         coop_system.update_full_kinematics();
+        
+        % Needed for singularity debug logic
+        loop_idx = loop_idx + 1;        
 
         switch mission_phase
 
@@ -265,6 +276,9 @@ function main()
                     
                     % Trigger state transition
                     mission_phase = "MoveObj";
+
+                    % Just for help with singularity debug
+                    t_coop_start = t;
                 end
 
             case "MoveObj"
@@ -376,6 +390,12 @@ function main()
             % Compute cooperative TPIK with new cooperative velocity constraint
             qdot_l = left_action_manager_coop.computeICAT(coop_system);
             qdot_r = right_action_manager_coop.computeICAT(coop_system);
+
+            % DEBUG: we log the minimum non zero singular value seen by the
+            % RegPseudoInverse to know if it ever gets under the threshold
+            % (0.01) which activates regularization
+            internal_sigma_left(loop_idx) = left_action_manager_coop.debug_min_sigma;  
+            internal_sigma_right(loop_idx) = right_action_manager_coop.debug_min_sigma;
             
         end
 
@@ -388,6 +408,7 @@ function main()
         logger_left.update(coop_system.time, coop_system.loopCounter)
         logger_right.update(coop_system.time, coop_system.loopCounter)
         coop_system.time;
+
         % Optional real-time slowdown
         SlowdownToRealtime(dt);
     end
@@ -398,5 +419,44 @@ function main()
     % tasks=[1];
     logger_left.plotAll();
     logger_right.plotAll();
+
+
+    % DEBUG: Singularity plot
+    figure('Name', 'Internal Regularization Check', 'Color', 'w');
+    
+    time_vector = 0:dt:end_time;
+    len = min([length(time_vector), length(internal_sigma_left)]);
+    
+    % Find the index corresponding to the start of the cooperative phase
+    start_idx = find(time_vector >= t_coop_start, 1, 'first');
+    if isempty(start_idx), start_idx = 1; end % Safety check
+    
+    % Slice the vectors
+    t_plot = time_vector(start_idx:len);
+    sigma_l_plot = internal_sigma_left(start_idx:len);
+    sigma_r_plot = internal_sigma_right(start_idx:len);
+    
+    % Plot the sliced data
+    plot(t_plot, sigma_l_plot, 'b', 'LineWidth', 1.5); hold on;
+    plot(t_plot, sigma_r_plot, 'r', 'LineWidth', 1.5);
+    
+    % Draw the Threshold Line
+    yline(0.01, '--k', '$\lambda_{thresh} = 0.01$', ...
+        'LineWidth', 2, 'LabelHorizontalAlignment', 'left', ...
+        'Interpreter', 'latex', 'FontSize', 12);
+    
+    % Formatting with LaTeX
+    xlabel('Time [s]', 'Interpreter', 'latex', 'FontSize', 12);
+    ylabel('Squared Singular Value $\sigma^2_i(J_{proj})$', 'Interpreter', 'latex', 'FontSize', 12);
+    
+    legend({'Left Arm ($\sigma^2_{min}$)', 'Right Arm ($\sigma^2_{min}$)'}, ...
+           'Interpreter', 'latex', 'FontSize', 12, 'Location', 'northeast');
+           
+    title('\textbf{Singularity Check}', 'Interpreter', 'latex', 'FontSize', 14);
+    
+    grid on;
+    xlim([t_coop_start, end_time]); % Force x-axis to start at transition
+    ylim([0, 0.05]);
+
 
 end

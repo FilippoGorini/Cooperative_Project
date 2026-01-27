@@ -18,19 +18,21 @@
 % Return values:
 % - Q, the new projection matrix
 % - rho, the updated rho value
-function [Q, rho, W] = iCAT_task(A, J, Qold, rhoold, xdot, lambda, threshold, weight)
+% - W
+% - s_vals, the full vector of singular values
+function [Q, rho, W, s_vals] = iCAT_task(A, J, Qold, rhoold, xdot, lambda, threshold, weight)
    n = size(J, 2);
-   
+
    if (size(A, 2) ~= size(J, 1))
        error('A and J have different size');
    end
-   
-   JQpinv1 = iCAT_pseudoInverse(J*Qold, A, Qold, lambda, threshold, weight);
+
+   [JQpinv1, ~, s_vals] = iCAT_pseudoInverse(J*Qold, A, Qold, lambda, threshold, weight);   % Modified to return singular values 
    JQpinv2 = iCAT_pseudoInverse(J*Qold, A, eye(n),lambda, threshold, weight);
-  
+
    % compute the new projection matrix
    Q = Qold*(eye(n) - JQpinv2*J*Qold);
-  
+
    % compute W to smooth out the use of Qold in lower priority tasks
    W = J*Qold*JQpinv1;
    T = eye(n) - Qold*JQpinv2*W*J;

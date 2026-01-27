@@ -9,8 +9,13 @@
 % Return values:
 % - Xinv the computed regularized pseudo inverse
 % - p a vector of the regularizing parameters
-function [Xinv, p] = RegPseudoInverse(X, lambda, threshold)
+% - diag_S a vector with all the singular values of the input matrix
+
+function [Xinv, p, diag_S] = RegPseudoInverse(X, lambda, threshold)
     [U,S,V] = svd(X);
+
+    diag_S = diag(S);       % NEW: return full vector of singular values
+
     sizeS = size(S);
     Sinv = zeros(sizeS(2), sizeS(1));
     for i = 1:min(sizeS)
@@ -19,3 +24,8 @@ function [Xinv, p] = RegPseudoInverse(X, lambda, threshold)
     end
     Xinv = V*Sinv*U';
 end
+
+% NB: we modified the function to also return the full vector of singular
+% values, which is useful to debug situations where we are near
+% singularities and regularization is applied when doing the
+% pseudoinversion

@@ -10,6 +10,9 @@ classdef ActionManager < handle
         previousAction_idx = 1          % index of the previously active action
         timeInCurrentAction = 0         % Time elapsed since setCurrentAction was called
         transitionDuration = 5          % 5 second transition time between actions
+        % New debug to hold the smallest non zero singular values of
+        % the matrix which is pseudoinverted in the computeICAT:
+        debug_min_sigma = 0;            
     end
 
     methods
@@ -17,14 +20,14 @@ classdef ActionManager < handle
         % Constructor for the ActionManager, specify dt and transition
         % duration for correct transitions between actions
         function obj = ActionManager(dt, num_dofs, transitionDuration)
-            
+
             if nargin >= 1 && ~isempty(dt)
                 if ~isnumeric(dt) || ~isscalar(dt) || dt <= 0
                     error('dt must be a positive numeric scalar.');
                 end
                 obj.dt = dt;
             end
-            
+
             if nargin >= 2 && ~isempty(num_dofs)
                 if ~isnumeric(num_dofs) || ~isscalar(num_dofs) || num_dofs <= 0
                     error('num_dofs must be a positive numeric scalar.');
@@ -57,7 +60,7 @@ classdef ActionManager < handle
             if ~isa(action, 'Action')
                 error('addAction requires an Action object.');
             end
-            
+
             % Check that there aren't already actions with the same name
             name = char(action.name);
             if isKey(obj.actionMap, name)
@@ -82,7 +85,7 @@ classdef ActionManager < handle
             Qp = eye(obj.num_dofs);
 
             for i = 1:length(obj.unified_task_list)  % Iterate on ALL of the possible tasks
-                
+
                 % Extract task
                 task = obj.unified_task_list{i};
 
@@ -93,7 +96,7 @@ classdef ActionManager < handle
                 for k = 1:length(current_tasks)
                     if task == current_tasks{k}, inCurrent = true; break; end
                 end             
-                
+
                 for k = 1:length(previous_tasks)
                     if task == previous_tasks{k}, inPrevious = true; break; end
                 end          
@@ -135,18 +138,33 @@ classdef ActionManager < handle
                 task.updateReference(robot);
                 task.updateJacobian(robot);
                 task.updateActivation(robot);
-                
+
                 % If the transition activation is 0 we can just skip the ICAT
                 % computation all together 
                 if trans_act == 0
                     continue; 
                 end
-                
+
                 % Perform ICAT Step considering each task's transition
-                % activation
-                [Qp, ydotbar] = iCAT_task(trans_act * task.A, task.J, ...
+                % activation (it now also returns the vector of singular
+                % values for debug)
+                [Qp, ydotbar, ~, s_vals] = iCAT_task(trans_act * task.A, task.J, ...
                                            Qp, ydotbar, task.xdotbar, ...
                                            1e-4, 0.01, 10);
+
+                % Check if this is the cooperative task and log the 6th
+                % value (not the 7th as it is zero)
+                if contains(task.task_name, "Cooperative Object")
+                    % We know the robot has 7 DoFs and the task has 6 DoFs.
+                    % The 7th eigenvalue is the null space (0)
+                    % The 6th eigenvalue is the one we actually care about
+                    if length(s_vals) >= 6
+                        obj.debug_min_sigma = s_vals(6);
+                    else
+                        obj.debug_min_sigma = min(s_vals); % Fallback
+                    end
+                end
+
             end
 
             % Last task: residual damping
@@ -185,6 +203,162 @@ classdef ActionManager < handle
         function name = getCurrentActionName(obj)
             name = obj.actions(obj.currentAction_idx).name;
         end
-        
+
     end
 end
+
+
+
+
+
+
+% 
+% 
+% classdef ActionManager < handle
+%     properties
+%         dt = 0.01
+%         num_dofs = 13
+%         unified_task_list = {}          % Contains all the possible tasks
+%         actions Action = Action.empty   % Array of action objects
+%         actionMap                       % Map of action names
+%         currentAction_idx = 1           % index of currently active action
+%         previousAction_idx = 1          % index of the previously active action
+%         timeInCurrentAction = 0         % Time elapsed since setCurrentAction was called
+%         transitionDuration = 5          % 5 second transition time between actions
+% 
+%         % NEW: Store the minimum singular value seen by iCAT for debugging
+%         debug_min_sigma = 0; 
+%     end
+%     methods
+%         % Constructor
+%         function obj = ActionManager(dt, num_dofs, transitionDuration)
+%             if nargin >= 1 && ~isempty(dt)
+%                 if ~isnumeric(dt) || ~isscalar(dt) || dt <= 0
+%                     error('dt must be a positive numeric scalar.');
+%                 end
+%                 obj.dt = dt;
+%             end
+%             if nargin >= 2 && ~isempty(num_dofs)
+%                 if ~isnumeric(num_dofs) || ~isscalar(num_dofs) || num_dofs <= 0
+%                     error('num_dofs must be a positive numeric scalar.');
+%                 end
+%                 obj.num_dofs = num_dofs;
+%             end
+%             if nargin >= 3 && ~isempty(transitionDuration)
+%                 if ~isnumeric(transitionDuration) || ~isscalar(transitionDuration) || transitionDuration <= 0
+%                     error('transitionDuration must be a positive numeric scalar.');
+%                 end
+%                 obj.transitionDuration = transitionDuration;
+%             end
+%             obj.actionMap = containers.Map('KeyType','char','ValueType','double');
+%         end
+% 
+%         % Add Unified List
+%         function addUnifiedList(obj, list)
+%             obj.unified_task_list = list;
+%         end
+% 
+%         % Add Action
+%         function addAction(obj, action)
+%             if ~isa(action, 'Action')
+%                 error('addAction requires an Action object.');
+%             end
+%             name = char(action.name);
+%             if isKey(obj.actionMap, name)
+%                 error('An action named "%s" already exists.', name);
+%             end
+%             obj.actions(end+1) = action;
+%             obj.actionMap(name) = numel(obj.actions);
+%         end
+% 
+%         % Compute ICAT
+%         function qdot = computeICAT(obj, robot)
+%             current_tasks  = obj.actions(obj.currentAction_idx).tasks;
+%             previous_tasks = obj.actions(obj.previousAction_idx).tasks;
+% 
+%             ydotbar = zeros(obj.num_dofs, 1);
+%             Qp = eye(obj.num_dofs);
+% 
+%             for i = 1:length(obj.unified_task_list)
+%                 task = obj.unified_task_list{i};
+% 
+%                 inCurrent = false;
+%                 inPrevious = false;
+%                 for k = 1:length(current_tasks)
+%                     if task == current_tasks{k}, inCurrent = true; break; end
+%                 end             
+%                 for k = 1:length(previous_tasks)
+%                     if task == previous_tasks{k}, inPrevious = true; break; end
+%                 end          
+% 
+%                 trans_act = 0;
+%                 if ~inPrevious && inCurrent
+%                     if task.is_kin_constraint
+%                         trans_act = 1;
+%                     else
+%                         trans_act = IncreasingBellShapedFunction(0, obj.transitionDuration, 0, 1, obj.timeInCurrentAction);
+%                     end
+%                 elseif inPrevious && ~inCurrent
+%                     if task.is_kin_constraint
+%                         trans_act = 0;
+%                     else
+%                         trans_act = DecreasingBellShapedFunction(0, obj.transitionDuration, 0, 1, obj.timeInCurrentAction);
+%                     end
+%                 elseif inPrevious && inCurrent
+%                     trans_act = 1;
+%                 end
+% 
+%                 task.updateReference(robot);
+%                 task.updateJacobian(robot);
+%                 task.updateActivation(robot);
+% 
+%                 if trans_act == 0
+%                     continue; 
+%                 end
+% 
+%                 % Capture 4th output (s_vals vector)
+%                 [Qp, ydotbar, ~, s_vals] = iCAT_task(trans_act * task.A, task.J, ...
+%                                            Qp, ydotbar, task.xdotbar, ...
+%                                            1e-4, 0.01, 10);
+% 
+%                 % Check if this is the cooperative task and log the 6th value
+%                 if contains(task.task_name, "Cooperative Object")
+%                     % We know the robot has 7 DoFs and the task has 6 DoFs.
+%                     % The 7th eigenvalue is the null space (0).
+%                     % The 6th eigenvalue is the "weakest link" of the task.
+%                     if length(s_vals) >= 6
+%                         obj.debug_min_sigma = s_vals(6);
+%                     else
+%                         obj.debug_min_sigma = min(s_vals); % Fallback
+%                     end
+%                 end
+% 
+%             end
+% 
+%             % Last task: residual damping (Update call to ignore extra outputs)
+%             [~, ydotbar, ~, ~] = iCAT_task(eye(obj.num_dofs), eye(obj.num_dofs), Qp, ydotbar, zeros(obj.num_dofs,1), 1e-4, 0.01, 10);
+% 
+%             qdot = ydotbar;
+%             obj.timeInCurrentAction = obj.timeInCurrentAction + obj.dt; 
+%         end
+% 
+%         % Set Current Action
+%         function setCurrentAction(obj, actionName)
+%             if ~(ischar(actionName) || isstring(actionName))
+%                 error('setCurrentAction expects an action name (char or string).');
+%             end
+%             name = char(actionName);
+%             if ~isKey(obj.actionMap, name)
+%                 error('No action named "%s" exists. Use addAction(Action) first.', name);
+%             end
+%             new_idx = obj.actionMap(name);
+%             obj.previousAction_idx = obj.currentAction_idx;
+%             obj.currentAction_idx = new_idx;
+%             obj.timeInCurrentAction = 0;
+%         end
+% 
+%         function name = getCurrentActionName(obj)
+%             name = obj.actions(obj.currentAction_idx).name;
+%         end
+%     end
+% end
