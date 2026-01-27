@@ -1,7 +1,7 @@
 classdef TaskWorkSpace < Task   
     properties
-        distance_star = 1.0;            
-        distance_full_activation = 1.5; 
+        distance_star = 1.5;            
+        distance_full_activation = 2.0; 
         dist_xy;                        
         n_d;  % Direction versors vehicle-nodule
         gain = 0.3;
@@ -13,8 +13,8 @@ classdef TaskWorkSpace < Task
         end
 
         function updateReference(obj, robot)
-            [~, w_lin] = CartError(robot.wTg , robot.wTt);
-
+            [~, w_lin] = CartError(robot.wTg , robot.wTv * robot.vTb);
+   
             w_lin_xy = w_lin(1:2);
             obj.dist_xy = norm(w_lin_xy);
 

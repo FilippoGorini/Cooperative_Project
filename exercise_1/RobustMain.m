@@ -39,6 +39,9 @@ task_stop             = TaskStop("Stop");
 action_safe_navigation = Action("SafeNavigation", ...
     {task_altitude_min, task_vehicle_pos, task_vehicle_orient, task_horizontal_att});
 
+action_alignment = Action("Alignment", ...
+    {task_horizontal_att, task_alignment, task_workspace});
+
 action_landing = Action("Landing", ...
     {task_altitude_landing, task_horizontal_att, task_alignment, task_workspace}); % ho tolto task_vehicle_pos
 
@@ -60,7 +63,8 @@ unified_list = {task_stop, ...                % constraint
 % --- ActionManager Initialization ---
 actionManager = ActionManager(dt, n_dofs, trans_duration);
 actionManager.addUnifiedList(unified_list);
-actionManager.addAction(action_safe_navigation); 
+actionManager.addAction(action_safe_navigation);
+actionManager.addAction(action_alignment);
 actionManager.addAction(action_landing); 
 actionManager.addAction(action_manipulation);
 actionManager.setCurrentAction("SafeNavigation"); 
@@ -104,10 +108,22 @@ for step = 1:sim.maxSteps
             % Check transition criteria
             if (vehicle_ang_error < ang_error_threshold) && (vehicle_lin_error < lin_error_threshold)
                 fprintf('VEHICLE GOAL REACHED [%.2f s]\n', sim.time);
-                fprintf('  Switching to: Landing\n\n');
-                actionManager.setCurrentAction("Landing");
+                fprintf('  Switching to: Alignment\n\n');
+                actionManager.setCurrentAction("Alignment");
             end
             
+        case "Alignment"
+            if mod(sim.loopCounter, round(1 / sim.dt)) == 0
+                fprintf('ACTION: Aligning [t = %.2f s]\n', sim.time);
+                fprintf('  Current Alignment Error: %.4f rad\n', task_alignment.theta);
+            end
+            
+            if abs(task_alignment.theta) < 0.01
+                 fprintf('ALIGNMENT COMPLETED [%.2f s]\n', sim.time);
+                 fprintf('  Switching to: Landing\n\n');
+                 actionManager.setCurrentAction("Landing");
+            end
+
         case "Landing"
             if mod(sim.loopCounter, round(1 / sim.dt)) == 0
                 fprintf('ACTION: Landing [t = %.2f s]\n', sim.time);

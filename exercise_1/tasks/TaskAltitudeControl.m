@@ -13,7 +13,7 @@ classdef TaskAltitudeControl < Task
                 obj.type = inputType;
                 obj.task_name = name;
                 if inputType == 0
-                    obj.gain = 0.05;
+                    obj.gain = 0.05; % To adjust
                 end
         end
 
