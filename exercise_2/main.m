@@ -1,4 +1,4 @@
-function main()
+function [logger] = bimanual_main()
     % Add path
     addpath('./simulation_scripts');
     addpath('./tools')
@@ -132,9 +132,15 @@ function main()
 
     % Initiliaze robot interface
     robot_udp = UDP_interface(real_robot);
+    
+    % Get action names list for simulation logger/plots
+    action_names_list = cell(1, length(actionManager.actions));
+    for k = 1:length(actionManager.actions)
+        action_names_list{k} = actionManager.actions(k).name;
+    end
 
     % Initialize logger
-    logger = SimulationLogger(ceil(end_time/dt)+1, bm_sim, unified_list);
+    logger = SimulationLogger(ceil(end_time/dt)+1, bm_sim, unified_list, action_names_list);
 
     % Flags 
     table_edge_passed = false;
@@ -266,21 +272,23 @@ function main()
         robot_udp.send(t, bm_sim)
         
         % Logging
-        logger.update(bm_sim.time, bm_sim.loopCounter)
+        logger.update(bm_sim.time, bm_sim.loopCounter, actionManager.currentAction_idx)
         
         % Optional real-time slowdown
         SlowdownToRealtime(dt);
     end
-
-    logger.plotAll();
     
 end
 
 
 
+%% LAUNCH THIS SECTION TO RUN THE SIMULATION ONCE
+logger = bimanual_main();
 
+%% PLOT SECTION
 
+% Example on how to plot just a specific subset of tasks:
+% logger.plotAll({"Left Tool", "Right Tool", "Left Min. Alt.", "Right Min. Alt."});
 
-
-
-
+% Plot all instead:
+logger.plotAll();
