@@ -270,9 +270,10 @@ function [logger] = bimanual_main()
         
         % Send updated state to Pybullet
         robot_udp.send(t, bm_sim)
-        
+
         % Logging
-        logger.update(bm_sim.time, bm_sim.loopCounter, actionManager.currentAction_idx)
+        logger.update(bm_sim.time, bm_sim.loopCounter, actionManager.currentAction_idx, ...
+                        bm_sim.left_arm.wTt(1:3, 4), bm_sim.right_arm.wTt(1:3, 4));     % we also log the tool positions
         
         % Optional real-time slowdown
         SlowdownToRealtime(dt);
@@ -292,3 +293,6 @@ logger = bimanual_main();
 
 % Plot all instead:
 logger.plotAll();
+
+%%
+logger.plotToolDistance();
