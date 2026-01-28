@@ -79,7 +79,7 @@ classdef PandaArm < handle
             % Initialize tTo, wTo and wJo to avoid dimension problems at startup
             obj.tTo = [];
             obj.wTo = [];
-            obj.wJo = [];
+            obj.wJo = zeros(6, 7);  
         end
 
         function setGoal(obj, obj_position, obj_orientation, arm_dist_offset, arm_rot_offset)

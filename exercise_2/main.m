@@ -264,6 +264,10 @@ function [logger] = bimanual_main()
         
         % Compute control commands for current action
         [q_dot] = actionManager.computeICAT(bm_sim);
+
+        % Actual object velocities: if the constraint hold this of course should be equal
+        obj_vel_actual_left  = bm_sim.left_arm.wJo  * q_dot(1:7);
+        obj_vel_actual_right = bm_sim.right_arm.wJo * q_dot(8:14);
         
         % Step the simulator (integrate velocities)
         bm_sim.sim(q_dot);
@@ -273,7 +277,9 @@ function [logger] = bimanual_main()
 
         % Logging
         logger.update(bm_sim.time, bm_sim.loopCounter, actionManager.currentAction_idx, ...
-                        bm_sim.left_arm.wTt(1:3, 4), bm_sim.right_arm.wTt(1:3, 4));     % we also log the tool positions
+                        bm_sim.left_arm.wTt(1:3, 4), bm_sim.right_arm.wTt(1:3, 4), ...      % we also log the tool positions
+                        obj_vel_actual_left, obj_vel_actual_right, ...                      % and the actual object velocities  
+                        object_task.xdotbar(1:6), object_task.xdotbar(7:12));               % and each arm's desired ref velocity              
         
         % Optional real-time slowdown
         SlowdownToRealtime(dt);
@@ -286,7 +292,7 @@ end
 %% LAUNCH THIS SECTION TO RUN THE SIMULATION ONCE
 logger = bimanual_main();
 
-%% PLOT SECTION
+%% PLOT ARM STATES AND TASKS
 
 % Example on how to plot just a specific subset of tasks:
 % logger.plotAll({"Left Tool", "Right Tool", "Left Min. Alt.", "Right Min. Alt."});
@@ -294,5 +300,8 @@ logger = bimanual_main();
 % Plot all instead:
 logger.plotAll();
 
-%%
+%% PLOT LINEAR DISTANCE BETWEEN TOOLS
 logger.plotToolDistance();
+
+%% PLOT DESIRED VS ACTUAL OBJECT VELOCITIES
+logger.plotObjectActualReal();

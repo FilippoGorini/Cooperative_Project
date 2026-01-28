@@ -8,7 +8,6 @@ end
 % Get all open figures
 figHandles = findall(0, 'Type', 'figure');
 
-% Loop through every figure and save it
 for i = 1:length(figHandles)
     f = figHandles(i);
     
