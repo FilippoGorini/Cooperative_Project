@@ -499,8 +499,8 @@ classdef SimulationLogger < handle
                     legends = {'$\omega_{x,L}$','$\omega_{y,L}$','$\omega_{z,L}$','$\dot{x}_L$','$\dot{y}_L$','$\dot{z}_L$', ...
                                '$\omega_{x,R}$','$\omega_{y,R}$','$\omega_{z,R}$','$\dot{x}_R$','$\dot{y}_R$','$\dot{z}_R$'};
                 else
-                    legends = {'$\alpha_{\omega x,L}$','$\alpha_{\omega y,L}$','$\alpha_{\omega z,L}$','$\alpha_{vx,L}$','$\alpha_{vy,L}$','$\alpha_{vz,L}$', ...
-                               '$\alpha_{\omega x,R}$','$\alpha_{\omega y,R}$','$\alpha_{\omega z,R}$','$\alpha_{vx,R}$','$\alpha_{vy,R}$','$\alpha_{vz,R}$'};
+                    legends = {'$\alpha_{\omega_{x},L}$','$\alpha_{\omega_{y},L}$','$\alpha_{\omega_{z},L}$','$\alpha_{\dot{x},L}$','$\alpha_{\dot{y},L}$','$\alpha_{\dot{z},L}$', ...
+                               '$\alpha_{\omega_{x},R}$','$\alpha_{\omega_{y},R}$','$\alpha_{\omega_{z},R}$','$\alpha_{\dot{x},R}$','$\alpha_{\dot{y},R}$','$\alpha_{\dot{z},R}$'};
                 end
                 
             else % Fallback
