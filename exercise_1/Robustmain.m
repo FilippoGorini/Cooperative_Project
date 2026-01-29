@@ -79,9 +79,7 @@ lin_error_threshold = 0.05;
 
 robotModel.setGoal(w_arm_goal_position, w_arm_goal_orientation, w_vehicle_goal_position, w_vehicle_goal_orientation);
 
-% ---------------------------------------------------------
-% --- [MODIFICA STYLE] Estrazione nomi azioni per Logger --
-% ---------------------------------------------------------
+% Name extractor for the logger
 action_names_list = cell(1, length(actionManager.actions));
 for k = 1:length(actionManager.actions)
     action_names_list{k} = actionManager.actions(k).name;
@@ -161,7 +159,6 @@ for step = 1:sim.maxSteps
     unity.send(robotModel);
 
     % 5. Logging
-    % [MODIFICA STYLE] Passiamo l'indice dell'azione corrente
     logger.update(sim.time, sim.loopCounter, actionManager.currentAction_idx);
 end
 

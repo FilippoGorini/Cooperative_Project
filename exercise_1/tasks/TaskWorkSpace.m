@@ -3,7 +3,7 @@ classdef TaskWorkSpace < Task
         distance_star = 1.0;            
         distance_full_activation = 1.5,; 
         dist_xy;                        
-        n_d;  % Direction versors vehicle-nodule
+        n_d;  % Direction versors manipulator's base-nodule
         gain = 0.3;
     end
     

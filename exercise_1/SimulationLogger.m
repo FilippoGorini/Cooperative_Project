@@ -77,7 +77,7 @@ classdef SimulationLogger < handle
             obj.data_len = loop;
         end
         
-        % --- PLOT ALL METHOD (MODIFICATO) ---
+        % --- PLOT ALL METHOD ---
         function plotAll(obj, task_selectors)
             % Determine which tasks to plot
             if nargin < 2 || isempty(task_selectors)
@@ -181,16 +181,16 @@ classdef SimulationLogger < handle
                     
                     if dims > 7; c_order = turbo(dims); else; c_order = lines(dims); end
                     
-                    % 1. DETERMINAZIONE DEL FRAME (Veicolo vs Mondo)
+                    
                     if contains(t_name_lower, 'horizontal') || ...
                        contains(t_name_lower, 'alignment') || ...
                        contains(t_name_lower, 'tool')
-                        frame_str = '{}^v'; % Frame Veicolo
+                        frame_str = '{}^v'; 
                     else
-                        frame_str = '{}^w'; % Frame World (Default)
+                        frame_str = '{}^w';
                     end
                     
-                    % 2. DETERMINAZIONE SUFFISSO OPZIONALE (es. _t per tool)
+                   
                     suffix_str = '';
                     if contains(t_name_lower, 'tool')
                         suffix_str = '_t';
@@ -217,14 +217,12 @@ classdef SimulationLogger < handle
                     % Generate adapted legends for UVMS based on Task Name
                     [leg_ref, y_lab_unit] = obj.generate_legends(dims, t_name_raw, 'Ref');
                     
-                    % COSTRUZIONE TITOLO
-                    % Esempio Tool: Reference ( dot{bar{x}} = {}^v dot{bar{x}}_t )
-                    % Esempio Pos:  Reference ( dot{bar{x}} = {}^w dot{bar{x}} )
+                    % Title
                     title_str = sprintf('\\textbf{%s - Reference ($ \\dot{\\bar{%s}} = %s\\dot{\\bar{%s}}%s$)}', ...
                                         t_name_safe, var_sym, frame_str, var_sym_2, suffix_str);
                     t_h = title(title_str);
                     
-                    % Y Label SEMPRE x dot bar
+                   
                     y_lab_full = sprintf('$\\dot{\\bar{%s}}$ %s', var_sym, y_lab_unit);
                     
                     l_h = legend(leg_ref);
@@ -254,7 +252,7 @@ classdef SimulationLogger < handle
     end
     
     methods (Access = private)
-        % --- HELPER: ADD SEPARATE ACTION STRIP AXES (CORRETTO PER LATEX) ---
+        % --- HELPER: ADD SEPARATE ACTION STRIP AXES ---
         function add_action_bars(obj, h_ax_data, valid_range, t_max)
             if isempty(valid_range) || obj.data_len == 0, return; end
             act_hist = obj.action_idx_log(valid_range);
@@ -274,11 +272,11 @@ classdef SimulationLogger < handle
             set(h_ax_data, 'Position', [pos_data(1), pos_data(2)+h_strip, pos_data(3), pos_data(4)*(1-strip_frac)]);
             set(h_ax_data, 'XTickLabel', []);
             
-            % Crea l'asse della striscia
+            
             h_ax_strip = axes('Position', [pos_data(1), pos_data(2), pos_data(3), h_strip]);
             hold(h_ax_strip, 'on');
             
-            % Imposta TickLabelInterpreter LATEX sul nuovo asse
+            
             set(h_ax_strip, ...
                 'YLim', [0, 1], ...
                 'XLim', [0, t_max], ...
