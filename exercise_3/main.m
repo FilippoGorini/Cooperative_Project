@@ -50,7 +50,8 @@ function [logger_left, logger_right] = cooperative_main()
     % goal position. After the robot clears the table edge, the minimum
     % altitude is computed wrt the floor instead of the table
     table_edge_threshold = 0.25;   
-    table_height = 0.55;
+    table_height = 0.3;     % RUN1
+    % table_height = 0.3;     % RUN2
     
     % Initialize Franka Emika Panda Model
     model = load("panda.mat");
@@ -69,7 +70,7 @@ function [logger_left, logger_right] = cooperative_main()
     
     % Define Object Shape and origin Frame
     obj_length = 0.06;
-    w_obj_pos = [0.5 0 0.59]';
+    w_obj_pos = [0.6 0 0.59]';
     w_obj_ori = rotation(0, 0, 0);
     wTo_start = [w_obj_ori, w_obj_pos; 0 0 0 1];
     
@@ -82,7 +83,8 @@ function [logger_left, logger_right] = cooperative_main()
     right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/9, pi));
     
     % Define Object goal frame (Cooperative Motion)
-    wTog = [rotation(0, 0, 0) [0.6, 0.4, 0.48]'; 0 0 0 1];
+    wTog = [rotation(0, 0, 0) [0.6, 0.40, 0.48]'; 0 0 0 1];     % RUN1
+    % wTog = [rotation(0, pi/6, 0) [0.7, 0, 0.2]'; 0 0 0 1];      % RUN2
     left_arm.setObjGoal(wTog);
     right_arm.setObjGoal(wTog);
     
@@ -313,8 +315,10 @@ function [logger_left, logger_right] = cooperative_main()
                 if current_obj_y_abs > table_edge_threshold && ~table_edge_passed
                     % If we cleared the table edge we can now set the
                     % ground as the new obstacle to keep a minimum altitude from
-                    left_min_alt_task.setObstacleHeight(0);
-                    right_min_alt_task.setObstacleHeight(0);
+                    left_min_alt_task.setObstacleHeight(0);         % RUN1
+                    right_min_alt_task.setObstacleHeight(0);        % RUN1
+                    % left_min_alt_task.setObstacleHeight(0.3);       % RUN2
+                    % right_min_alt_task.setObstacleHeight(0.3);      % RUN2
                     
                     table_edge_passed = true;
                     
