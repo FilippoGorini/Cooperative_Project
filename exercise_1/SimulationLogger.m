@@ -150,7 +150,7 @@ classdef SimulationLogger < handle
             ax2 = subplot(2,1,2);
             plot(time_vec, obj.v_nu(:, valid_range), 'LineWidth', 2);
             t_h = title('\textbf{Vehicle Velocity ($\nu$)}'); 
-            l_h = legend('$u$','$v$','$w$','$p$','$q$','$r$'); 
+            l_h = legend('$\dot{x}$','$\dot{y}$','$\dot{z}$','$\dot{\phi}$','$\dot{\theta}$','$\dot{\psi}$'); 
             grid on; xlim([0, t_max]);
             obj.expand_ylim(ax2);
             obj.format_plot(t_h, l_h, ax2, 'Vel. [m/s, rad/s]'); 
@@ -346,7 +346,7 @@ classdef SimulationLogger < handle
                 if is_ref
                     legends = {'$\dot{\bar{\theta}}$'};
                 else
-                    legends = {'$\alpha_{\theta}$'}; 
+                    legends = {'$\alpha$'}; 
                 end
                 
             % --- 5. TaskWorkSpace (Scalar - Distanza) ---
@@ -355,7 +355,7 @@ classdef SimulationLogger < handle
                 if is_ref
                     legends = {'$\dot{\bar{d}}_{xy}$'};
                 else
-                    legends = {'$\alpha_{d}$'}; 
+                    legends = {'$\alpha$'}; 
                 end
 
             % --- 6. TaskTool (6D: Angular first, then Linear) ---
