@@ -1,7 +1,7 @@
 classdef TaskWorkSpace < Task   
     properties
-        distance_star = 1.5;            
-        distance_full_activation = 2.0; 
+        distance_star = 1.0;            
+        distance_full_activation = 1.5,; 
         dist_xy;                        
         n_d;  % Direction versors vehicle-nodule
         gain = 0.3;

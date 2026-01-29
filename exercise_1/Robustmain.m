@@ -8,8 +8,8 @@ clc; clear; close all;
 
 % --- Simulation parameters ---
 dt             = 0.05;      
-endTime        = 250;
-trans_duration = 5.0;         % 5 s transition duration between actions
+endTime        = 150;
+trans_duration = 5.0;         
 n_dofs         = 13;          % 6 (vehicle) + 7 (arm)
 
 % --- Initialize robot model and simulator ---
@@ -25,9 +25,9 @@ unity = UnityInterface("127.0.0.1");
 task_vehicle_pos      = TaskVehiclePos("Vehicle Position");
 task_vehicle_orient   = TaskVehicleOrient("Vehicle Orientation");
 task_horizontal_att   = TaskHorizontalAtt("Horizontal Attitude");
-task_altitude_min     = TaskAltitudeControl("Minimum Altitude",1); 
+task_altitude_min     = TaskAltitudeControl("Minimum Altitude", 1); 
 task_altitude_min.set_h_min(1);
-task_altitude_landing = TaskAltitudeControl("Landing Altitude",0);
+task_altitude_landing = TaskAltitudeControl("Landing Altitude", 0);
 task_altitude_landing.set_h_star(0);
 task_alignment        = TaskAlignment("Alignment");
 task_workspace        = TaskWorkSpace("Workspace");
@@ -35,7 +35,6 @@ task_tool             = TaskTool("Tool");
 task_stop             = TaskStop("Stop");
 
 % --- ACTIONS ---
-% Priorities are decided by the unified_list order, not the order here.
 action_safe_navigation = Action("SafeNavigation", ...
     {task_altitude_min, task_horizontal_att, task_vehicle_pos, task_vehicle_orient});
 
@@ -48,16 +47,16 @@ action_landing = Action("Landing", ...
 action_manipulation = Action("Manipulation", ...
     {task_stop, task_tool});
 
-% --- UNIFIED LIST (Highest to Lowest Priority) ---
-unified_list = {task_stop, ...                % constraint
-                task_altitude_min, ...        % safety
-                task_horizontal_att, ...      % prerequisite
-                task_alignment, ...           % prerequisite
-                task_workspace, ...           % prerequisite
-                task_vehicle_pos, ...         % action def
-                task_vehicle_orient, ...      % action def
-                task_altitude_landing, ...    % action def
-                task_tool                     % action def
+% --- UNIFIED LIST ---
+unified_list = {task_stop, ...                
+                task_altitude_min, ...        
+                task_horizontal_att, ...      
+                task_alignment, ...           
+                task_workspace, ...           
+                task_vehicle_pos, ...         
+                task_vehicle_orient, ...      
+                task_altitude_landing, ...    
+                task_tool                     
                 };
 
 % --- ActionManager Initialization ---
@@ -78,11 +77,18 @@ w_vehicle_goal_orientation = [0 ,-0.06, 0.5];
 ang_error_threshold = 0.02;
 lin_error_threshold = 0.05;
 
-% Set goals in the robot model
 robotModel.setGoal(w_arm_goal_position, w_arm_goal_orientation, w_vehicle_goal_position, w_vehicle_goal_orientation);
 
-% Initialize the logger
-logger = SimulationLogger(ceil(endTime/dt)+1, robotModel, unified_list);
+% ---------------------------------------------------------
+% --- [MODIFICA STYLE] Estrazione nomi azioni per Logger --
+% ---------------------------------------------------------
+action_names_list = cell(1, length(actionManager.actions));
+for k = 1:length(actionManager.actions)
+    action_names_list{k} = actionManager.actions(k).name;
+end
+
+% Initialize the logger passing the action names list
+logger = SimulationLogger(ceil(endTime/dt)+1, robotModel, unified_list, action_names_list);
 
 % --- Main simulation loop ---
 for step = 1:sim.maxSteps
@@ -90,22 +96,21 @@ for step = 1:sim.maxSteps
     robotModel.altitude = unity.receiveAltitude(robotModel);
     
     % --- Mission Phase Logic (Switch-Case) ---
-    switch actionManager.getCurrentActionName()
+    current_action_name = actionManager.getCurrentActionName();
+    
+    switch current_action_name
         
         case "SafeNavigation"
-            % Compute vehicle errors
             [vehicle_ang_err_vec, vehicle_lin_err_vec] = CartError(robotModel.wTgv, robotModel.wTv);
             vehicle_ang_error = norm(vehicle_ang_err_vec);
             vehicle_lin_error = norm(vehicle_lin_err_vec);
             
-            % Debug prints every 1 second
             if mod(sim.loopCounter, round(1 / sim.dt)) == 0
                 fprintf('ACTION: SafeNavigation [t = %.2f s]\n', sim.time);
                 fprintf('  Vehicle: Lin Err = %.4f | Ang Err = %.4f | Alt = %.2f\n', ...
                     vehicle_lin_error, vehicle_ang_error, robotModel.altitude);
             end
             
-            % Check transition criteria
             if (vehicle_ang_error < ang_error_threshold) && (vehicle_lin_error < lin_error_threshold)
                 fprintf('VEHICLE GOAL REACHED [%.2f s]\n', sim.time);
                 fprintf('  Switching to: Alignment\n\n');
@@ -138,12 +143,10 @@ for step = 1:sim.maxSteps
         case "Manipulation"
             if mod(sim.loopCounter, round(1 / sim.dt)) == 0
                 fprintf('ACTION: Manipulation [t = %.2f s]\n', sim.time);
-                fprintf('  Current Altitude: %.4f m\n', robotModel.altitude);
             end
     end
 
-    % 2. Compute control commands for current action
-    % Skip ICAT for the first second to allow Unity/Sensors to settle
+    % 2. Compute control commands
     if sim.time > 1.0
         [v_nu, q_dot] = actionManager.computeICAT(robotModel);
     else
@@ -151,14 +154,15 @@ for step = 1:sim.maxSteps
         q_dot = zeros(7,1);
     end
 
-    % 3. Step the simulator (integrate velocities)
+    % 3. Step the simulator
     sim.step(v_nu, q_dot);
 
-    % 4. Send updated state to Unity
+    % 4. Send to Unity
     unity.send(robotModel);
 
     % 5. Logging
-    logger.update(sim.time, sim.loopCounter);
+    % [MODIFICA STYLE] Passiamo l'indice dell'azione corrente
+    logger.update(sim.time, sim.loopCounter, actionManager.currentAction_idx);
 end
 
 % --- Post-Simulation ---
