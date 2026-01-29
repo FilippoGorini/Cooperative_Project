@@ -1,4 +1,4 @@
-function main()
+function [logger_left, logger_right] = cooperative_main()
     % Add path
     addpath('./simulation_scripts');
     addpath('./tools')
@@ -23,6 +23,13 @@ function main()
     internal_sigma_right = zeros(1, n_steps);
     loop_idx = 0;
     t_coop_start = 0;
+    t_coop_end   = 0;
+
+    % Stuff for desired vs non coop vs coop object velocities
+    obj_vel_des      = zeros(6, n_steps); 
+    obj_vel_nc_left  = zeros(6, n_steps); 
+    obj_vel_nc_right = zeros(6, n_steps); 
+    obj_vel_coop     = zeros(6, n_steps);
     
     % Print on terminal parameters
     print_frequency = 4;
@@ -35,7 +42,7 @@ function main()
 
     % Cartesian error thresholds for tool and obj
     ang_error_threshold = 0.01;
-    lin_error_threshold = 0.003;
+    lin_error_threshold = 0.001;
     obj_ang_error_threshold = 0.01;
     obj_lin_error_threshold = 0.01;
     % Table edge threshold: we assumed that the object lies on a table,
@@ -75,7 +82,7 @@ function main()
     right_arm.setGoal(w_obj_pos, w_obj_ori, +linear_offset, rotation(pi, -pi/9, pi));
     
     % Define Object goal frame (Cooperative Motion)
-    wTog = [rotation(0, pi/6, 0) [0.6, 0.4, 0.48]'; 0 0 0 1];
+    wTog = [rotation(0, 0, 0) [0.6, 0.4, 0.48]'; 0 0 0 1];
     left_arm.setObjGoal(wTog);
     right_arm.setObjGoal(wTog);
     
@@ -169,6 +176,15 @@ function main()
     right_unified_list_coop = {right_object_task_coop, ...
                                 right_joint_limits_task, ...
                                 right_min_alt_task};
+    
+    % Unified lists to log all tasks, both cooperative or not (that way we
+    % don't have to add tasks to the actual action managers which are not
+    % strictly needed)
+    all_tasks_left = {left_tool_task, left_joint_limits_task, left_min_alt_task, ...
+                  left_object_task, left_zero_joint_vel_task, left_object_task_coop};
+
+    all_tasks_right = {right_tool_task, right_joint_limits_task, right_min_alt_task, ...
+                   right_object_task, right_zero_joint_vel_task, right_object_task_coop};
 
     % TO DO: Create two action manager objects to manage the tasks of a single
     % manipulator (one for the non-cooperative and one for the cooperative steps
@@ -203,10 +219,17 @@ function main()
     
     % Initiliaze robot interface
     robot_udp = UDP_interface(real_robot);
+
+    % Manual action names just for the plotting
+    action_names_list = {
+        "MoveTo", "MoveObj", "Stop"
+    };
     
     % Initialize logger
-    logger_left = SimulationLogger(ceil(end_time/dt)+1, coop_system, left_unified_list);
-    logger_right = SimulationLogger(ceil(end_time/dt)+1, coop_system, right_unified_list);
+    logger_left = SimulationLogger(ceil(end_time/dt)+1, coop_system, ...
+                                    all_tasks_left, action_names_list);
+    logger_right = SimulationLogger(ceil(end_time/dt)+1, coop_system, ...
+                                    all_tasks_right, action_names_list);
     
     % Flags 
     table_edge_passed = false;
@@ -329,6 +352,9 @@ function main()
                     % Switch to next action
                     left_action_manager.setCurrentAction("LeftZeroVel");
                     right_action_manager.setCurrentAction("RightZeroVel");
+                    
+                    % Log cooperation stop time
+                    t_coop_end = t;
 
                     % Trigger state transition
                     mission_phase = "Stop";
@@ -373,6 +399,12 @@ function main()
             % compute it just once for simplicity.
             xdot_hat = 1 / (mu_l + mu_r) * (mu_l * xdot_l + mu_r * xdot_r);
             
+            % Just for logging/plot
+            obj_vel_des(:, loop_idx)      = left_object_task.xdotbar;   % if constraint hold it's the same, we can take it either from L or R 
+            obj_vel_nc_left(:, loop_idx)  = xdot_l;                     % non coop left reference
+            obj_vel_nc_right(:, loop_idx) = xdot_r;                     % non coop right reference
+            obj_vel_coop(:, loop_idx)     = xdot_hat;                   % cooperative vel (same for both L and R)
+
             % Compute cartesian constraint
             C = [H_l, -H_r];
             % Compute combined unconstrained motion space
@@ -403,22 +435,22 @@ function main()
         
         % Send updated state to Pybullet
         robot_udp.send(t, coop_system)
-    
-        % Logging
-        logger_left.update(coop_system.time, coop_system.loopCounter)
-        logger_right.update(coop_system.time, coop_system.loopCounter)
+
+        % Update left logger
+        logger_left.update(coop_system.time, coop_system.loopCounter, ...
+                           left_action_manager.currentAction_idx, ...
+                           coop_system.left_arm.wTt(1:3,4), coop_system.right_arm.wTt(1:3,4));
+                           
+        % Update right logger (we dont need to pass tool poses here too, we use the left to plot the tool distance)
+        logger_right.update(coop_system.time, coop_system.loopCounter, ...
+                            right_action_manager.currentAction_idx);
+        
         coop_system.time;
 
         % Optional real-time slowdown
         SlowdownToRealtime(dt);
     end
 
-    %9. Display joint position, velocity and end effector velocities, Display for a given action, a number
-    %of tasks
-    % action=1;
-    % tasks=[1];
-    logger_left.plotAll();
-    logger_right.plotAll();
 
 
     % DEBUG: Singularity plot
@@ -427,14 +459,23 @@ function main()
     time_vector = 0:dt:end_time;
     len = min([length(time_vector), length(internal_sigma_left)]);
     
-    % Find the index corresponding to the start of the cooperative phase
-    start_idx = find(time_vector >= t_coop_start, 1, 'first');
-    if isempty(start_idx), start_idx = 1; end % Safety check
+    % If cooperation never ended, stop at simulation end
+    if t_coop_end == 0
+        t_coop_end = end_time;
+    end
     
-    % Slice the vectors
-    t_plot = time_vector(start_idx:len);
-    sigma_l_plot = internal_sigma_left(start_idx:len);
-    sigma_r_plot = internal_sigma_right(start_idx:len);
+    % Find indices for cooperative phase only
+    start_idx = find(time_vector >= t_coop_start, 1, 'first');
+    end_idx   = find(time_vector <= t_coop_end, 1, 'last');
+    
+    % Safety checks
+    if isempty(start_idx), start_idx = 1; end
+    if isempty(end_idx),   end_idx   = len; end
+    
+    % Slice the vectors ONLY during cooperation
+    t_plot = time_vector(start_idx:end_idx);
+    sigma_l_plot = internal_sigma_left(start_idx:end_idx);
+    sigma_r_plot = internal_sigma_right(start_idx:end_idx);
     
     % Plot the sliced data
     plot(t_plot, sigma_l_plot, 'b', 'LineWidth', 1.5); hold on;
@@ -453,10 +494,86 @@ function main()
            'Interpreter', 'latex', 'FontSize', 12, 'Location', 'northeast');
            
     title('\textbf{Singularity Check}', 'Interpreter', 'latex', 'FontSize', 14);
+
+    % Set axis numbers to latex font
+    set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12);
     
     grid on;
-    xlim([t_coop_start, end_time]); % Force x-axis to start at transition
+    xlim([t_coop_start, t_coop_end]);       % Force x-axis to start at transition
     ylim([0, 0.05]);
 
 
+
+    % DEBUG: Desired vs non cooperative vs cooperative velocities
+    t_p = time_vector(start_idx:end_idx);
+    v_des_norm  = vecnorm(obj_vel_des(4:6, start_idx:end_idx), 2, 1);
+    v_nc_L_norm = vecnorm(obj_vel_nc_left(4:6, start_idx:end_idx), 2, 1);
+    v_nc_R_norm = vecnorm(obj_vel_nc_right(4:6, start_idx:end_idx), 2, 1);
+    v_coop_norm = vecnorm(obj_vel_coop(4:6, start_idx:end_idx), 2, 1);
+    
+    % Setup Figure
+    fig_pos = [100, 100, 800, 400];
+    figure('Name', 'Cooperative vs Non-Cooperative', 'Color', 'w', 'Position', fig_pos);
+    clf;
+    ax1 = subplot(1,1,1); hold(ax1, 'on');
+    
+    % Define Colors (Matched from provided snippet)
+    col_des  = [0.9290 0.6940 0.1250]; % Yellow/Orange (Reference)
+    col_nc_L = [0.4660 0.6740 0.1880]; % Green (Act L)
+    col_nc_R = [0.3010 0.7450 0.9330]; % Light Blue (Act R)
+    col_coop = [0.4940 0.1840 0.5560]; % Purple (Ref R style -> used for Coop result)
+    
+    % Plot Lines
+    % Desired (Dashed, thick)
+    p1 = plot(t_p, v_des_norm, '--', 'LineWidth', 1.8, 'Color', col_des, ...
+        'DisplayName', 'Desired ($\|{}^w\dot{\bar{\mathbf{x}}}_{o}\|$)');
+    
+    % Non-Cooperative (Solid, thinner)
+    p2 = plot(t_p, v_nc_L_norm, '-', 'LineWidth', 1.4, 'Color', col_nc_L, ...
+        'DisplayName', 'Non-Coop L ($\|{}^w\dot{\mathbf{x}}_{o,L}\|$)');
+    
+    p3 = plot(t_p, v_nc_R_norm, '-', 'LineWidth', 1.4, 'Color', col_nc_R, ...
+        'DisplayName', 'Non-Coop R ($\|{}^w\dot{\mathbf{x}}_{o,R}\|$)');
+    
+    % Cooperative (Solid, thickest - The Result)
+    p4 = plot(t_p, v_coop_norm, '-', 'LineWidth', 2.0, 'Color', col_coop, ...
+        'DisplayName', 'Cooperative ($\|{}^w\dot{\hat{\mathbf{x}}}_o\|$)');
+    
+    % Formatting
+    grid on; 
+    xlim([t_p(1), t_p(end)]);
+    set(gca, 'Box', 'on');
+    
+    % Title and Labels
+    title('\textbf{Desired vs Non-Cooperative vs Cooperative Velocities Norm}', ...
+          'Interpreter', 'latex', 'FontSize', 16);
+    
+    ylabel('$\| {}^w \dot{\bar{\mathbf{x}}}_o \|$ [m/s, rad/s]', ...
+           'Interpreter', 'latex', 'FontSize', 14);
+    
+    xlabel('Time [s]', ...
+           'Interpreter', 'latex', 'FontSize', 14);
+    
+    % Legend
+    legend([p1 p2 p3 p4], 'Location', 'best', 'Interpreter', 'latex', 'FontSize', 12);
+    
+    % Ticks formatting
+    set(gca, 'TickLabelInterpreter', 'latex', 'FontSize', 12);
+
+
 end
+
+
+
+
+%% LAUNCH THIS SECTION TO RUN THE SIMULATION ONCE
+[logger_left, logger_right] = cooperative_main();
+
+%% LEFT PLOT ALL
+logger_left.plotAll();
+
+%% RIGHT PLOT ALL
+logger_right.plotAll();
+
+%% PLOT LINEAR DISTANCE BETWEEN TOOLS
+logger_left.plotToolDistance();
